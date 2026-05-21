@@ -202,11 +202,13 @@ const PARTS = [
 ];
 
 const PART_MAP = new Map(PARTS.map((part) => [part.id, part]));
+const initialLang = new URLSearchParams(window.location.search).get("lang");
 
 const state = {
   route: "atlas",
   selectedPartId: "frontal",
   viewMode: "full",
+  lang: ["en", "ka"].includes(initialLang) ? initialLang : localStorage.getItem("brainAtlasLang") || "en",
   threeReady: false,
   calloutVisible: false,
   calloutAnchor: null
@@ -219,10 +221,16 @@ const els = {
   atlasScreen: document.querySelector("#atlasScreen"),
   articleScreen: document.querySelector("#articleScreen"),
   infoDock: document.querySelector("#infoDock"),
+  brandTitle: document.querySelector("#brandTitle"),
+  brandSubtitle: document.querySelector("#brandSubtitle"),
+  partSearchLabel: document.querySelector("#partSearchLabel"),
+  structuresLabel: document.querySelector("#structuresLabel"),
+  selectedLabel: document.querySelector("#selectedLabel"),
   pageTitle: document.querySelector("#pageTitle"),
   eyebrow: document.querySelector("#eyebrow"),
   topbarActions: document.querySelector(".topbar-actions"),
   viewButtons: Array.from(document.querySelectorAll("[data-view]")),
+  langButtons: Array.from(document.querySelectorAll("[data-lang]")),
   navLinks: Array.from(document.querySelectorAll(".nav-link")),
   stagePanel: document.querySelector(".stage-panel"),
   canvas: document.querySelector("#brainCanvas"),
@@ -580,6 +588,354 @@ const HOTSPOT_PARTS = [
 PARTS.push(...EXTRA_PARTS, ...HOTSPOT_PARTS);
 [...EXTRA_PARTS, ...HOTSPOT_PARTS].forEach((part) => PART_MAP.set(part.id, part));
 
+const UI_TEXT = {
+  en: {
+    brandTitle: "Brain Atlas",
+    brandSubtitle: "psychology + medicine",
+    navAtlas: "Atlas",
+    navNeurons: "Neurons",
+    navStudy: "Study Board",
+    findStructure: "Find a structure",
+    searchPlaceholder: "frontal, memory, vision",
+    structures: "Structures",
+    selected: "Selected",
+    full: "Full",
+    half: "Half",
+    inside: "Inside",
+    split: "Split",
+    fullTitle: "Show the full brain",
+    halfTitle: "Open a sagittal half view",
+    insideTitle: "Fade cortex and reveal internal parts",
+    splitTitle: "Separate the major structures",
+    atlasEyebrow: "Interactive neuroanatomy",
+    atlasTitle: "3D Brain Structure Atlas",
+    neuronsEyebrow: "Cellular foundation",
+    neuronsTitle: "Neurons And Signaling",
+    studyEyebrow: "Teaching mode",
+    studyTitle: "Student Study Board",
+    deepDive: "Deep Dive",
+    noMatch: "No structure matches that search.",
+    openFullPage: "Open full page",
+    neuronBasics: "Neuron basics",
+    mainJob: "Main job",
+    studentSignal: "Student signal",
+    clinicalHook: "Clinical hook",
+    connectsWith: "Connects with",
+    closeNote: "Close structure note",
+    fullStatus: "Full cortical model",
+    halfStatus: "Sagittal half view",
+    insideStatus: "Internal systems emphasized",
+    splitStatus: "Separated structure view",
+    readyStatus: "3D model ready",
+    loadingStatus: "Loading neural display",
+    unavailableStatus: "3D engine unavailable",
+    bestAnchor: "Best anchor",
+    system: "System",
+    examLens: "Exam lens",
+    backAtlas: "Back to 3D atlas",
+    studyBoard: "Study board",
+    signalPath: "Signal Path",
+    input: "Input",
+    output: "Output",
+    processing: "Processing",
+    anatomy: "Anatomy",
+    physiology: "Physiology",
+    psychologyLens: "Psychology Lens",
+    clinicalPattern: "Clinical Pattern",
+    connections: "Connections",
+    relatedStructures: "Related Structures",
+    relatedFallback: "Use the atlas to compare nearby systems.",
+    neuronKicker: "Neuron basics",
+    neuronHeading: "The unit that makes networks possible",
+    neuronLead: "Neurons receive signals, integrate them, fire action potentials, and communicate across synapses. The brain is not only its parts; it is also the timing and chemistry between cells.",
+    decisionPoint: "Decision point",
+    dendrites: "Dendrites",
+    soma: "Soma",
+    axonHillock: "Axon hillock",
+    axon: "Axon",
+    synapse: "Synapse",
+    howSignalMoves: "How a signal moves",
+    signalMoveItems: [
+      "Dendrites collect excitatory and inhibitory inputs.",
+      "The soma integrates those inputs over space and time.",
+      "If threshold is reached, an action potential travels down the axon.",
+      "Synapses release neurotransmitters that affect the next cell."
+    ],
+    neurotransmitters: "Neurotransmitters",
+    neurotransmittersBody: "Glutamate is the major excitatory transmitter. GABA is the major inhibitory transmitter. Dopamine, serotonin, acetylcholine, norepinephrine, and many peptides tune mood, attention, reward, sleep, and movement.",
+    gliaMatter: "Glia matter",
+    gliaBody: "Astrocytes support metabolism and synapses. Oligodendrocytes make CNS myelin. Microglia survey immune threats. Ependymal cells line ventricles and help with CSF flow.",
+    forPsychology: "For psychology",
+    psychologyBody: "Behavior changes when synaptic weights change. Learning, reinforcement, fear conditioning, habit, attention, and mood all depend on circuit-level plasticity.",
+    forMedicine: "For medicine",
+    medicineBody: "Many disorders are easier to reason through when you separate lesion localization, neurotransmitter effects, conduction speed, inflammation, and network compensation.",
+    bestNextStep: "Best next step",
+    bestNextBody: "Use the atlas to connect cells to systems: hippocampal neurons bind memory, cerebellar circuits tune error, and frontal loops select behavior.",
+    openAtlas: "Open atlas",
+    studyMode: "Study mode",
+    studyHeading: "Use structure, function, lesion, and pathway together",
+    studyLead: "Students remember neuroanatomy better when every structure has a role, a clinical pattern, and a pathway. This board keeps those four pieces visible.",
+    returnModel: "Return to 3D model",
+    reviewNeurons: "Review neurons",
+    miniMethod: "Mini Method",
+    locate: "Locate",
+    locateHint: "Where is the structure?",
+    assign: "Assign",
+    assignHint: "What does it help compute?",
+    predict: "Predict",
+    predictHint: "What happens if it fails?",
+    connect: "Connect",
+    connectHint: "Which pathway explains it?",
+    clinicalPrompts: "Clinical prompts",
+    psychologyPrompts: "Psychology prompts",
+    fastCompare: "Fast compare",
+    structure: "Structure",
+    coreFunction: "Core function",
+    failurePattern: "Failure pattern",
+    clinicalPromptItems: [
+      "Personality change plus poor inhibition: compare frontal lobe and limbic circuits.",
+      "New memory formation is impaired: inspect hippocampus and medial temporal lobe.",
+      "Unsteady gait and intention tremor: inspect cerebellum.",
+      "Contralateral visual field loss: inspect occipital cortex and optic radiations."
+    ],
+    psychologyPromptItems: [
+      "Fear conditioning: limbic system, amygdala, hippocampus, and prefrontal regulation.",
+      "Working memory: prefrontal cortex with parietal attention networks.",
+      "Language comprehension: temporal lobe networks.",
+      "Embodied attention: parietal body-space maps."
+    ]
+  },
+  ka: {
+    brandTitle: "ტვინის ატლასი",
+    brandSubtitle: "ფსიქოლოგია + მედიცინა",
+    navAtlas: "ატლასი",
+    navNeurons: "ნეირონები",
+    navStudy: "სასწავლო დაფა",
+    findStructure: "სტრუქტურის ძებნა",
+    searchPlaceholder: "შუბლის წილი, მეხსიერება, მხედველობა",
+    structures: "სტრუქტურები",
+    selected: "არჩეულია",
+    full: "სრული",
+    half: "ნახევარი",
+    inside: "შიგნით",
+    split: "გაყოფა",
+    fullTitle: "სრული ტვინის ჩვენება",
+    halfTitle: "საგიტალური ნახევარი ხედი",
+    insideTitle: "ქერქის გამჭვირვალობა და შიდა ნაწილები",
+    splitTitle: "ძირითადი სტრუქტურების დაშორება",
+    atlasEyebrow: "ინტერაქტიული ნეიროანატომია",
+    atlasTitle: "ტვინის 3D სტრუქტურის ატლასი",
+    neuronsEyebrow: "უჯრედული საფუძველი",
+    neuronsTitle: "ნეირონები და სიგნალები",
+    studyEyebrow: "სასწავლო რეჟიმი",
+    studyTitle: "სტუდენტის სასწავლო დაფა",
+    deepDive: "ღრმა განხილვა",
+    noMatch: "ამ ძებნას სტრუქტურა არ ემთხვევა.",
+    openFullPage: "სრული გვერდი",
+    neuronBasics: "ნეირონების საფუძვლები",
+    mainJob: "მთავარი როლი",
+    studentSignal: "სტუდენტის მინიშნება",
+    clinicalHook: "კლინიკური კავშირი",
+    connectsWith: "კავშირები",
+    closeNote: "შენიშვნის დახურვა",
+    fullStatus: "სრული ქერქული მოდელი",
+    halfStatus: "საგიტალური ნახევარი ხედი",
+    insideStatus: "გამოკვეთილია შიდა სისტემები",
+    splitStatus: "სტრუქტურები დაშორებულია",
+    readyStatus: "3D მოდელი მზადაა",
+    loadingStatus: "ნეიროეკრანი იტვირთება",
+    unavailableStatus: "3D ძრავა მიუწვდომელია",
+    bestAnchor: "საუკეთესო საყრდენი",
+    system: "სისტემა",
+    examLens: "საგამოცდო ფოკუსი",
+    backAtlas: "3D ატლასზე დაბრუნება",
+    studyBoard: "სასწავლო დაფა",
+    signalPath: "სიგნალის გზა",
+    input: "შესავალი",
+    output: "გამოსავალი",
+    processing: "დამუშავება",
+    anatomy: "ანატომია",
+    physiology: "ფიზიოლოგია",
+    psychologyLens: "ფსიქოლოგიური ხედვა",
+    clinicalPattern: "კლინიკური სურათი",
+    connections: "კავშირები",
+    relatedStructures: "დაკავშირებული სტრუქტურები",
+    relatedFallback: "გამოიყენე ატლასი ახლო სისტემების შესადარებლად.",
+    neuronKicker: "ნეირონის საფუძვლები",
+    neuronHeading: "ერთეული, რომელიც ქსელებს შესაძლებელს ხდის",
+    neuronLead: "ნეირონები იღებენ სიგნალებს, აერთიანებენ მათ, წარმოქმნიან მოქმედების პოტენციალებს და სინაფსებით უკავშირდებიან ერთმანეთს. ტვინი მხოლოდ ნაწილები არ არის; ის ასევე დროისა და ქიმიის ქსელია.",
+    decisionPoint: "გადაწყვეტის წერტილი",
+    dendrites: "დენდრიტები",
+    soma: "სომა",
+    axonHillock: "აქსონის ბორცვი",
+    axon: "აქსონი",
+    synapse: "სინაფსი",
+    howSignalMoves: "როგორ მოძრაობს სიგნალი",
+    signalMoveItems: [
+      "დენდრიტები აგროვებენ აღმგზნებ და შემაკავებელ სიგნალებს.",
+      "სომა ამ სიგნალებს სივრცესა და დროში აერთიანებს.",
+      "თუ ზღვარი მიღწეულია, მოქმედების პოტენციალი აქსონზე ვრცელდება.",
+      "სინაფსები გამოყოფენ ნეიროტრანსმიტერებს, რომლებიც შემდეგ უჯრედზე მოქმედებს."
+    ],
+    neurotransmitters: "ნეიროტრანსმიტერები",
+    neurotransmittersBody: "გლუტამატი მთავარი აღმგზნები გადამცემია, GABA კი მთავარი შემაკავებელი. დოფამინი, სეროტონინი, აცეტილქოლინი, ნორეპინეფრინი და პეპტიდები არეგულირებენ განწყობას, ყურადღებას, ჯილდოს, ძილს და მოძრაობას.",
+    gliaMatter: "გლია მნიშვნელოვანია",
+    gliaBody: "ასტროციტები მხარს უჭერენ მეტაბოლიზმსა და სინაფსებს. ოლიგოდენდროციტები ქმნიან CNS მიელინს. მიკროგლია აკვირდება იმუნურ საფრთხეებს. ეპენდიმური უჯრედები პარკუჭებს ფარავს და CSF-ის დინებას ეხმარება.",
+    forPsychology: "ფსიქოლოგიისთვის",
+    psychologyBody: "ქცევა იცვლება, როცა სინაფსური წონები იცვლება. სწავლა, განმტკიცება, შიშის განპირობება, ჩვევა, ყურადღება და განწყობა ქსელურ პლასტიკურობაზეა დამოკიდებული.",
+    forMedicine: "მედიცინისთვის",
+    medicineBody: "ბევრი დარღვევა უფრო გასაგებია, როცა ცალკე ვხედავთ დაზიანების ლოკალიზაციას, გადამცემებს, გამტარობის სიჩქარეს, ანთებას და ქსელურ კომპენსაციას.",
+    bestNextStep: "შემდეგი ნაბიჯი",
+    bestNextBody: "ატლასით დააკავშირე უჯრედები სისტემებთან: ჰიპოკამპის ნეირონები მეხსიერებას აბამენ, ნათხემი შეცდომას ასწორებს, შუბლის წრეები კი ქცევას ირჩევს.",
+    openAtlas: "ატლასის გახსნა",
+    studyMode: "სასწავლო რეჟიმი",
+    studyHeading: "სტრუქტურა, ფუნქცია, დაზიანება და გზა ერთად გამოიყენე",
+    studyLead: "სტუდენტები ნეიროანატომიას უკეთ იმახსოვრებენ, როცა თითოეულ სტრუქტურას როლი, კლინიკური ნიმუში და გზა აქვს. ეს დაფა ოთხივე ნაწილს თვალწინ ტოვებს.",
+    returnModel: "3D მოდელზე დაბრუნება",
+    reviewNeurons: "ნეირონების გადახედვა",
+    miniMethod: "მინი მეთოდი",
+    locate: "იპოვე",
+    locateHint: "სად მდებარეობს სტრუქტურა?",
+    assign: "მიანიჭე",
+    assignHint: "რას გამოთვლის ან ეხმარება?",
+    predict: "ივარაუდე",
+    predictHint: "რა მოხდება დაზიანებისას?",
+    connect: "დააკავშირე",
+    connectHint: "რომელი გზა ხსნის ამას?",
+    clinicalPrompts: "კლინიკური მინიშნებები",
+    psychologyPrompts: "ფსიქოლოგიური მინიშნებები",
+    fastCompare: "სწრაფი შედარება",
+    structure: "სტრუქტურა",
+    coreFunction: "ძირითადი ფუნქცია",
+    failurePattern: "დაზიანების ნიმუში",
+    clinicalPromptItems: [
+      "პიროვნების ცვლილება და სუსტი შეკავება: შეადარე შუბლის წილი და ლიმბური წრეები.",
+      "ახალი მეხსიერების ფორმირება დარღვეულია: შეამოწმე ჰიპოკამპი და მედიალური საფეთქლის წილი.",
+      "არამყარი სიარული და განზრახვითი ტრემორი: შეამოწმე ნათხემი.",
+      "კონტრალატერალური მხედველობის ველის დაკარგვა: შეამოწმე კეფის ქერქი და მხედველობის რადიაციები."
+    ],
+    psychologyPromptItems: [
+      "შიშის განპირობება: ლიმბური სისტემა, ამიგდალა, ჰიპოკამპი და პრეფრონტალური რეგულაცია.",
+      "სამუშაო მეხსიერება: პრეფრონტალური ქერქი და თხემის ყურადღების ქსელები.",
+      "ენის გაგება: საფეთქლის წილის ქსელები.",
+      "სხეულზე დაფუძნებული ყურადღება: თხემის სხეული-სივრცის რუკები."
+    ]
+  }
+};
+
+const KA_PARTS = {
+  frontal: {
+    label: "შუბლის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "აღმასრულებელი კონტროლი, ნებაყოფლობითი მოძრაობა, მეტყველება, შეკავება და პიროვნება.",
+    quick: "გეხმარება არჩევაში, დაგეგმვაში, იმპულსის შეჩერებაში, მოძრაობასა და განზრახვის ქცევად ქცევაში.",
+    studentCue: "დაგეგმვა, განსჯა, შეკავება, პიროვნება ან მოტორული ზოლი თუ ჩანს, აქ დაიწყე.",
+    clinical: "დაზიანებამ შეიძლება შეცვალოს იმპულსის კონტროლი, განწყობა, სოციალური განსჯა, ძალა ან ექსპრესიული მეტყველება.",
+    tags: ["დაგეგმვა", "მოტორი", "პიროვნება", "მეტყველება"]
+  },
+  parietal: {
+    label: "თხემის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "შეხება, სხეულის რუკა, სივრცითი ყურადღება, სენსორული ინტეგრაცია და ანგარიში.",
+    quick: "ქმნის სხეულისა და ახლო სივრცის ცოცხალ რუკას.",
+    studentCue: "იფიქრე სომატოსენსორულ ქერქზე, neglect-ზე, მარჯვენა-მარცხენა ორიენტაციაზე და სივრცეზე.",
+    clinical: "დაზიანება იწვევს სენსორულ დაკარგვას, neglect-ს, აპრაქსიას ან სხეულის ორიენტაციის სირთულეს.",
+    tags: ["შეხება", "სივრცე", "ყურადღება", "სხეულის რუკა"]
+  },
+  temporal: {
+    label: "საფეთქლის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "სმენა, ენის გაგება, ობიექტის ამოცნობა, ემოცია და მეხსიერებაში შესვლა.",
+    quick: "ხმას მნიშვნელობად აქცევს და მეხსიერებას გამოსაყენებელ ისტორიად აყალიბებს.",
+    studentCue: "აუდიტორული ქერქი, ვერნიკეს არე, ამოცნობა, აურიანი შეტევები და მეხსიერება.",
+    clinical: "დარღვევამ შეიძლება დააზიანოს გაგება, ამოცნობა, ემოციური მნიშვნელობა ან შეტევის სიმპტომები.",
+    tags: ["სმენა", "ენა", "მეხსიერება", "ამოცნობა"]
+  },
+  occipital: {
+    label: "კეფის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "მხედველობა, კიდეების ამოცნობა, მოძრაობა, ფერი და ადრეული ვიზუალური ინტერპრეტაცია.",
+    quick: "იღებს ვიზუალურ სიგნალებს და იწყებს ფორმის, კონტრასტის, ფერისა და მოძრაობის ამოღებას.",
+    studentCue: "მხედველობის ველის დეფექტები, პირველადი ვიზუალური ქერქი, დორსალური და ვენტრალური ნაკადები.",
+    clinical: "დაზიანება იწვევს კონტრალატერალურ ველის დაკარგვას, ქერქულ სიბრმავეს ან ვიზუალურ აგნოზიას.",
+    tags: ["მხედველობა", "ფერი", "მოძრაობა", "ველი"]
+  },
+  cerebellum: {
+    label: "ნათხემი",
+    group: "მოტორული კოორდინაცია",
+    summary: "კოორდინაცია, დროის განსაზღვრა, ბალანსი, მოტორული სწავლა და პროგნოზი.",
+    quick: "ადარებს დაგეგმილ მოძრაობას რეალურ მოძრაობასთან და შეცდომას ასწორებს.",
+    studentCue: "ატაქსია, განზრახვითი ტრემორი, დისმეტრია, ნისტაგმი, პოზა და მოტორული სწავლა.",
+    clinical: "დაზიანება იწვევს არამყარ სიარულს, ცუდ კოორდინაციას, სკანდირებულ მეტყველებას და არაზუსტ მიწვდომას.",
+    tags: ["კოორდინაცია", "ბალანსი", "დრო", "სწავლა"]
+  },
+  brainstem: {
+    label: "ტვინის ღერო",
+    group: "გადარჩენის სისტემები",
+    summary: "სუნთქვა, სიფხიზლე, ავტონომური კონტროლი, კრანიალური ნერვები და სიგნალის რელე.",
+    quick: "ინარჩუნებს სიცოცხლის ძირითად ფუნქციებს და ატარებს სიგნალებს ტვინს, ზურგის ტვინსა და სახეს შორის.",
+    studentCue: "კრანიალური ნერვები, კომა, სუნთქვის დრაივი, რეტიკულური აქტივაცია და გრძელი გზები.",
+    clinical: "პატარა დაზიანებაც მაღალი რისკია, რადგან გზები აქ ძალიან მჭიდროდ არის შეკრული.",
+    tags: ["სუნთქვა", "სიფხიზლე", "კრანიალური ნერვები", "რელე"]
+  },
+  limbic: {
+    label: "ლიმბური სისტემა",
+    group: "ემოცია + მოტივაცია",
+    summary: "ემოცია, მნიშვნელობა, ჯილდო, საფრთხის ამოცნობა და მეხსიერების ემოციური შეფერვა.",
+    quick: "გამოცდილებას ემოციურ ღირებულებას აძლევს და წყვეტს, რა არის მნიშვნელოვანი.",
+    studentCue: "ამიგდალა, შიში, ჯილდო, მოტივაცია, ემოციური მეხსიერება და ავტონომური პასუხი.",
+    clinical: "დიზრეგულაცია კავშირშია შფოთვასთან, ტრავმასთან, დამოკიდებულებასთან და განწყობასთან.",
+    tags: ["ემოცია", "ჯილდო", "შიში", "მოტივაცია"]
+  },
+  hippocampus: {
+    label: "ჰიპოკამპი",
+    group: "მეხსიერების სისტემა",
+    summary: "დეკლარაციული მეხსიერება, კონტექსტი, სივრცითი ნავიგაცია და კონსოლიდაცია.",
+    quick: "გამოცდილებას აღდგენად მეხსიერებად აქცევს და კონტექსტს რუკავს.",
+    studentCue: "ანტეროგრადული ამნეზია, სივრცითი რუკები, მედიალური საფეთქლის წილი და კონსოლიდაცია.",
+    clinical: "ორმხრივმა დაზიანებამ ახალი დეკლარაციული მეხსიერების ფორმირება ძლიერ დააზიანოს.",
+    tags: ["მეხსიერება", "ნავიგაცია", "კონტექსტი", "სწავლა"]
+  },
+  thalamus: {
+    label: "თალამუსი",
+    group: "რელე + ყურადღება",
+    summary: "სენსორული რელე, სიფხიზლე, ყურადღების ფილტრაცია და ქერქული კოორდინაცია.",
+    quick: "ფილტრავს და ანაწილებს ინფორმაციას, სანამ ის ქერქამდე მივა.",
+    studentCue: "რელე ბირთვები, ტკივილი, შეგრძნება, სიფხიზლე, ყურადღება და ცნობიერება.",
+    clinical: "დაზიანებამ შეიძლება გამოიწვიოს სენსორული სინდრომები, ტკივილი, სიფხიზლის ან ყურადღების პრობლემები.",
+    tags: ["რელე", "ყურადღება", "შეგრძნება", "სიფხიზლე"]
+  },
+  "corpus-callosum": {
+    label: "კორპუს კალოზუმი",
+    group: "ჰემისფეროთაშორისი ხიდი",
+    summary: "მარცხენა და მარჯვენა ჰემისფეროებს შორის კომუნიკაციის ხიდი.",
+    quick: "ჰემისფეროებს სენსორული, მოტორული და კოგნიტიური ინფორმაციის გაზიარებაში ეხმარება.",
+    studentCue: "split-brain კვლევები, ჰემისფეროთაშორისი გადაცემა და კოორდინაცია.",
+    clinical: "გათიშვამ შეიძლება გამოიწვიოს split-brain ნიშნები ან ინფორმაციის გადაცემის დარღვევა.",
+    tags: ["ხიდი", "ჰემისფეროები", "გადაცემა", "split brain"]
+  },
+  prefrontal: { label: "პრეფრონტალური ქერქი", group: "აღმასრულებელი ქერქი", summary: "მიზნები, სამუშაო მეხსიერება, შეკავება, დაგეგმვა და სოციალური განსჯა.", quick: "მიზნებს აქტიურად ინახავს და ქცევას მოქმედებამდე არჩევს.", studentCue: "სამუშაო მეხსიერება, შეკავება, დაგვიანებული ჯილდო, დაგეგმვა.", clinical: "დარღვევამ შეიძლება შეცვალოს განსჯა, ყურადღება, მოტივაცია და იმპულსის კონტროლი.", tags: ["აღმასრულებელი", "დაგეგმვა", "შეკავება"] },
+  "motor-cortex": { label: "პირველადი მოტორული ქერქი", group: "მოტორული ქერქი", summary: "ნებაყოფლობითი მოძრაობის ბრძანებები, განსაკუთრებით კონტრალატერალური კონტროლი.", quick: "მოძრაობის გეგმას დაღმავალ მოტორულ გამოსვლად აქცევს.", studentCue: "პრეცენტრალური ხვეული, კორტიკოსპინალური გზა, კონტრალატერალური სისუსტე.", clinical: "დაზიანება იწვევს ზედა მოტორული ნეირონის სისუსტეს.", tags: ["მოძრაობა", "ძალა", "კორტიკოსპინალური"] },
+  "somatosensory-cortex": { label: "სომატოსენსორული ქერქი", group: "სენსორული ქერქი", summary: "შეხების, წნევის, ტკივილისა და სხეულის პოზიციის ქერქული რუკა.", quick: "სხეულის შეგრძნებებს ორგანიზებულ რუკად აქცევს.", studentCue: "პოსტცენტრალური ხვეული, ჰომუნკულუსი, კონტრალატერალური შეგრძნება.", clinical: "დაზიანება იწვევს შეგრძნების დაკარგვას ან ლოკალიზაციის სირთულეს.", tags: ["შეხება", "ტკივილი", "სხეული"] },
+  broca: { label: "ბროკას არე", group: "ენის წარმოება", summary: "მეტყველების დაგეგმვა და ექსპრესიული ენის წარმოება.", quick: "აზრს სალაპარაკო მოტორულ გეგმად აწყობს.", studentCue: "არაფლუენტური აფაზია, დაზიანებული გამეორება, შენარჩუნებული გაგება.", clinical: "დაზიანება იწვევს ბროკას აფაზიას.", tags: ["მეტყველება", "ენა", "აფაზია"] },
+  wernicke: { label: "ვერნიკეს არე", group: "ენის გაგება", summary: "სიტყვის მნიშვნელობის და სალაპარაკო ენის გაგების ქსელი.", quick: "ხმოვან ენას მნიშვნელობას ანიჭებს.", studentCue: "ფლუენტური აფაზია, ცუდი გაგება, უაზრო სიტყვები.", clinical: "დაზიანება იწვევს ვერნიკეს აფაზიას.", tags: ["გაგება", "ენა", "მნიშვნელობა"] },
+  amygdala: { label: "ამიგდალა", group: "საფრთხე + ემოცია", summary: "ემოციური მნიშვნელობა, საფრთხე, შიში და მეხსიერების ემოციური ტონი.", quick: "წყვეტს, რამდენად ემოციურად მნიშვნელოვანი ან საფრთხის შემცველია სტიმული.", studentCue: "შიში, ემოციური მეხსიერება, საფრთხე, ავტონომური რეაქცია.", clinical: "დარღვევები კავშირშია შფოთვასთან, ტრავმასთან და ემოციურ რეგულაციასთან.", tags: ["შიში", "საფრთხე", "ემოცია"] },
+  "basal-ganglia": { label: "ბაზალური განგლიები", group: "მოქმედების არჩევა", summary: "ჩვევები, მოქმედების არჩევა, მოძრაობის დაწყება და ჯილდოზე სწავლა.", quick: "ეხმარება ტვინს აირჩიოს რომელი მოქმედება დაიწყოს ან შეაჩეროს.", studentCue: "პარკინსონი, ჰანტინგტონი, go/no-go გზები, ჩვევები.", clinical: "დაზიანება ცვლის მოძრაობის სისწრაფეს, ჩვევებს და მოტივაციას.", tags: ["ჩვევა", "მოძრაობა", "დოფამინი"] },
+  hypothalamus: { label: "ჰიპოთალამუსი", group: "ჰომეოსტაზი", summary: "ტემპერატურა, შიმშილი, წყურვილი, ჰორმონები, ავტონომური კონტროლი და ძილი.", quick: "სხეულის საჭიროებებს ჰორმონულ და ავტონომურ პასუხად აქცევს.", studentCue: "ჰიპოფიზი, შიმშილი, წყურვილი, ტემპერატურა, ცირკადული რიტმი.", clinical: "დაზიანება არღვევს ენდოკრინულ ფუნქციას, ძილს, მადას ან ტემპერატურას.", tags: ["ჰორმონები", "ძილი", "შიმშილი"] },
+  pineal: { label: "ფიჭვისებრი ჯირკვალი", group: "ენდოკრინული + ძილი", summary: "მცირე შუახაზის ჯირკვალი, რომელიც მელატონინს გამოყოფს და ცირკადულ რიტმს ეხმარება.", quick: "სინათლესა და სიბნელეს სხეულის დღე-ღამის სიგნალად თარგმნის.", studentCue: "მელატონინი, ცირკადული რიტმი, ეპითალამუსი, კალციფიკაცია.", clinical: "სიმსივნემ შეიძლება გამოიწვიოს პაროინოს სინდრომი.", tags: ["მელატონინი", "ცირკადული", "ძილი"] },
+  insula: { label: "ინსულა", group: "ინტეროცეფცია", summary: "აერთიანებს სხეულის მდგომარეობას, გემოს, ტკივილს, ემოციას და თვითგრძნობას.", quick: "შიდა სხეულის სიგნალებს ცნობიერ გრძნობად აქცევს.", studentCue: "ინტეროცეფცია, ზიზღი, ტკივილი, გემო, craving.", clinical: "დარღვევამ შეიძლება შეცვალოს სხეულის, ტკივილის, ემოციის ან craving-ის აღქმა.", tags: ["ინტეროცეფცია", "ტკივილი", "გემო"] },
+  "cingulate-cortex": { label: "ცინგულარული ქერქი", group: "მედიალური ქერქი", summary: "აკონტროლებს კონფლიქტს, ტკივილს, ძალისხმევას, ყურადღებას და ემოციურ მოქმედებას.", quick: "წყვეტს, რას სჭირდება ძალისხმევა და ყურადღება.", studentCue: "კონფლიქტი, ტკივილის აფექტი, მოტივაცია, შეცდომის აღმოჩენა.", clinical: "დაზიანება ცვლის მოტივაციას, ყურადღებას და ემოციურ რეგულაციას.", tags: ["ძალისხმევა", "ყურადღება", "ტკივილი"] },
+  "visual-cortex": { label: "პირველადი ვიზუალური ქერქი", group: "ვიზუალური ქერქი", summary: "იღებს რუკირებულ სიგნალებს თალამუსიდან და ამოიღებს ადრეულ ვიზუალურ ნიშნებს.", quick: "ქმნის ვიზუალური სივრცის პირველ ქერქულ რუკას.", studentCue: "V1, კალკარინის ღარი, რეტინოტოპია, ველის დაკარგვა.", clinical: "დაზიანება იწვევს პროგნოზირებად კონტრალატერალურ დეფექტებს.", tags: ["V1", "მხედველობა", "რეტინოტოპია"] },
+  "auditory-cortex": { label: "აუდიტორული ქერქი", group: "სმენის ქერქი", summary: "ამუშავებს ხმის სიხშირეს, დროს, მეტყველების ხმებს და სმენით სცენას.", quick: "ვიბრაციის ნიმუშებს ორგანიზებულ ხმად აქცევს.", studentCue: "ზედა საფეთქლის ხვეული, ტონოტოპია, სმენა და ენა.", clinical: "დაზიანება არღვევს ხმის ამოცნობას და სმენით ენას.", tags: ["სმენა", "ტონოტოპია", "მეტყველება"] },
+  "angular-gyrus": { label: "კუთხის ხვეული", group: "ასოციაციური ქერქი", summary: "აერთიანებს ენას, რიცხვს, კითხვას, სივრცით ყურადღებას და სემანტიკას.", quick: "სიმბოლოებს, მნიშვნელობას და სივრცით იდეებს აერთიანებს.", studentCue: "გერსტმანის ნიშნები, კითხვა, წერა, ანგარიში.", clinical: "დომინანტური დაზიანება არღვევს ანგარიშს, წერას და მარჯვენა-მარცხენა ორიენტაციას.", tags: ["კითხვა", "მათემატიკა", "სემანტიკა"] },
+  "fusiform-gyrus": { label: "ფუზიფორმული ხვეული", group: "ვენტრალური ვიზუალური ნაკადი", summary: "მაღალი დონის ვიზუალური ამოცნობა, განსაკუთრებით სახეები და გამოცდილ კატეგორიები.", quick: "სახეების და მნიშვნელოვანი ვიზუალური ნიმუშების ამოცნობას ეხმარება.", studentCue: "სახის ამოცნობა, ვენტრალური ნაკადი, პროზოპაგნოზია.", clinical: "მარჯვენა ფუზიფორმის დაზიანება პროზოპაგნოზიასთანაა დაკავშირებული.", tags: ["სახეები", "ამოცნობა", "ვენტრალური"] },
+  "nucleus-accumbens": { label: "ბირთვი აკუმბენსი", group: "ჯილდოს წრე", summary: "აკავშირებს დოფამინს, მოტივაციას, განმტკიცებით სწავლას და ჯილდოზე ქცევას.", quick: "ნიშნავს ჯილდოს და მოქმედების გამეორებას ამოტივირებს.", studentCue: "ჯილდო, დამოკიდებულება, მოტივაცია, ვენტრალური სტრიატუმი.", clinical: "წრეების ცვლილება მნიშვნელოვანია დამოკიდებულებაში, დეპრესიასა და აპათიაში.", tags: ["ჯილდო", "მოტივაცია", "დოფამინი"] },
+  "substantia-nigra": { label: "შავი ნივთიერება", group: "შუატვინის დოფამინი", summary: "აწვდის დოფამინს მოძრაობის ძალისთვის, ჩვევებისა და ჯილდოს პროგნოზისთვის.", quick: "დოფამინით მოძრაობის დაწყებას და მასშტაბირებას ეხმარება.", studentCue: "პარკინსონი, დოფამინი, შუატვინი, ბრადიკინეზია.", clinical: "დეგენერაცია პარკინსონის მოტორული ნიშნების ცენტრია.", tags: ["დოფამინი", "მოძრაობა", "პარკინსონი"] },
+  pons: { label: "ხიდი", group: "ტვინის ღერო", summary: "ქერქის სიგნალებს ნათხემს გადასცემს და ეხმარება ძილს, სუნთქვასა და კრანიალურ ნერვებს.", quick: "ხიდია ქერქს, ნათხემს, სახესა და სიფხიზლეს შორის.", studentCue: "ტვინის ღეროს ხიდი, კრანიალური ნერვები, ძილი, სუნთქვა.", clinical: "დაზიანება ცვლის თვალის მოძრაობას, სახის ფუნქციას, სიფხიზლეს და გრძელ გზებს.", tags: ["რელე", "ძილი", "კრანიალური ნერვები"] },
+  medulla: { label: "მოგრძო ტვინი", group: "ტვინის ღერო", summary: "მართავს სუნთქვას, გულისცემას, ყლაპვას და ღებინების რეფლექსებს.", quick: "სასიცოცხლო რეფლექსებს მუდმივად ამუშავებს.", studentCue: "სუნთქვა, გულ-სისხლძარღვთა კონტროლი, ყლაპვა, პირამიდული გადაკვეთა.", clinical: "დაზიანება საფრთხეს უქმნის სუნთქვას, ცირკულაციას და ყლაპვას.", tags: ["სუნთქვა", "გულისცემა", "რეფლექსები"] },
+  "cerebellar-vermis": { label: "ნათხემის ჭია", group: "ნათხემის შუახაზი", summary: "აკოორდინირებს პოზას, ტანს, სიარულის სტაბილობას და თვალ-თავის ბალანსს.", quick: "მოძრაობისას სხეულის შუახაზს ასტაბილურებს.", studentCue: "სიარულის ატაქსია, ტანის არასტაბილურობა, პოზა.", clinical: "დაზიანება კლასიკურად იწვევს სიარულის და ტანის ატაქსიას.", tags: ["სიარული", "პოზა", "ბალანსი"] }
+};
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -605,15 +961,82 @@ function interestingFact(part) {
   return INTERESTING_FACTS[part.id] || "Its role is easiest to remember by pairing location, pathway, function, and lesion pattern.";
 }
 
+function tr(key) {
+  return UI_TEXT[state.lang]?.[key] ?? UI_TEXT.en[key] ?? key;
+}
+
+function currentPart(part) {
+  if (state.lang !== "ka") return part;
+  const translated = KA_PARTS[part.id];
+  if (!translated) return part;
+  return {
+    ...part,
+    ...translated,
+    connections: translated.connections || part.connections,
+    tags: translated.tags || part.tags,
+    deep: {
+      ...part.deep,
+      ...(translated.deep || {})
+    }
+  };
+}
+
+function currentInterestingFact(part) {
+  if (state.lang === "ka") {
+    return "დასამახსოვრებლად დააკავშირე მდებარეობა, გზა, ფუნქცია და დაზიანების ნიმუში.";
+  }
+  return interestingFact(part);
+}
+
+function renderStaticText() {
+  document.documentElement.lang = state.lang === "ka" ? "ka" : "en";
+  els.brandTitle.textContent = tr("brandTitle");
+  els.brandSubtitle.textContent = tr("brandSubtitle");
+  els.navLinks.forEach((link) => {
+    const labels = {
+      atlas: tr("navAtlas"),
+      neurons: tr("navNeurons"),
+      study: tr("navStudy")
+    };
+    link.querySelector("span").textContent = labels[link.dataset.route] || link.dataset.route;
+  });
+  els.partSearchLabel.innerHTML = `${iconMarkup("mdi:magnify")} ${escapeHtml(tr("findStructure"))}`;
+  els.partSearch.placeholder = tr("searchPlaceholder");
+  els.structuresLabel.textContent = tr("structures");
+  els.selectedLabel.textContent = tr("selected");
+  els.langButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.lang === state.lang);
+  });
+
+  const viewCopy = {
+    full: ["full", "fullTitle"],
+    half: ["half", "halfTitle"],
+    inside: ["inside", "insideTitle"],
+    split: ["split", "splitTitle"]
+  };
+  els.viewButtons.forEach((button) => {
+    const [labelKey, titleKey] = viewCopy[button.dataset.view];
+    button.textContent = tr(labelKey);
+    button.title = tr(titleKey);
+  });
+}
+
 function renderPartsList() {
   const query = els.partSearch.value.trim().toLowerCase();
   const filtered = PARTS.filter((part) => {
+    const display = currentPart(part);
     const haystack = [
       part.label,
       part.group,
       part.summary,
       part.quick,
+      display.label,
+      display.group,
+      display.summary,
+      display.quick,
       part.tags.join(" "),
+      display.tags.join(" "),
+      display.connections.join(" "),
       part.connections.join(" ")
     ].join(" ").toLowerCase();
     return !query || haystack.includes(query);
@@ -621,16 +1044,19 @@ function renderPartsList() {
 
   els.partCount.textContent = String(filtered.length);
   els.partsList.innerHTML = filtered.length
-    ? filtered.map((part) => `
+    ? filtered.map((part) => {
+      const display = currentPart(part);
+      return `
         <button class="part-button ${part.id === state.selectedPartId ? "is-active" : ""}" type="button" data-part="${part.id}" style="${partStyle(part)}">
           <span class="part-swatch" aria-hidden="true">${iconMarkup(partIcon(part), "part-icon")}</span>
           <span>
-            <strong>${escapeHtml(part.label)}</strong>
-            <span>${escapeHtml(part.group)} · ${escapeHtml(part.quick)}</span>
+            <strong>${escapeHtml(display.label)}</strong>
+            <span>${escapeHtml(display.group)} &middot; ${escapeHtml(display.quick)}</span>
           </span>
         </button>
-      `).join("")
-    : `<div class="empty-state">No structure matches that search.</div>`;
+      `;
+    }).join("")
+    : `<div class="empty-state">${escapeHtml(tr("noMatch"))}</div>`;
 }
 
 function renderBrainHotspots() {
@@ -639,9 +1065,10 @@ function renderBrainHotspots() {
     .map(({ id, x, y }) => {
       const part = PART_MAP.get(id);
       if (!part) return "";
+      const display = currentPart(part);
       return `
-        <button class="brain-hotspot ${part.id === state.selectedPartId ? "is-active" : ""}" type="button" data-part="${part.id}" aria-label="${escapeHtml(part.label)}" style="--x:${x}%; --y:${y}%; --hotspot-color:${part.color}">
-          <span class="sr-only">${escapeHtml(part.label)}</span>
+        <button class="brain-hotspot ${part.id === state.selectedPartId ? "is-active" : ""}" type="button" data-part="${part.id}" aria-label="${escapeHtml(display.label)}" style="--x:${x}%; --y:${y}%; --hotspot-color:${part.color}">
+          <span class="sr-only">${escapeHtml(display.label)}</span>
         </button>
       `;
     })
@@ -685,7 +1112,7 @@ function hideCallout() {
 }
 
 function updateLegend(part) {
-  els.legendTitle.textContent = part.label;
+  els.legendTitle.textContent = currentPart(part).label;
   els.legendAccent.style.background = part.color;
   els.legendAccent.style.boxShadow = `0 0 18px ${part.color}`;
 }
@@ -710,17 +1137,18 @@ function renderFactCard({ title, icon, body, detail, list }) {
 
 function updateAnnotationContent(part) {
   if (!els.brainCallout) return;
+  const display = currentPart(part);
   els.brainCallout.style.setProperty("--part-color", part.color);
   els.brainCallout.innerHTML = `
     <div class="callout-head">
       ${iconMarkup(partIcon(part), "callout-icon")}
       <div>
-        <small>${escapeHtml(part.group)}</small>
-        <strong>${escapeHtml(part.label)}</strong>
+        <small>${escapeHtml(display.group)}</small>
+        <strong>${escapeHtml(display.label)}</strong>
       </div>
     </div>
-    <p>${escapeHtml(part.quick)}</p>
-    <button class="callout-close" type="button" aria-label="Close structure note">x</button>
+    <p>${escapeHtml(display.quick)}</p>
+    <button class="callout-close" type="button" aria-label="${escapeHtml(tr("closeNote"))}">x</button>
   `;
 }
 
@@ -762,50 +1190,51 @@ function positionAnnotation() {
 }
 
 function renderInfoDock(part) {
+  const display = currentPart(part);
   els.infoDock.style.setProperty("--part-color", part.color);
   els.infoDock.innerHTML = `
     <article class="info-main console-profile" style="${partStyle(part)}">
       <div class="info-heading">
         <span class="info-icon" aria-hidden="true">${iconMarkup(partIcon(part), "info-icon-glyph")}</span>
         <div>
-          <p class="eyebrow">${escapeHtml(part.group)}</p>
-          <h2>${escapeHtml(part.label)}</h2>
+          <p class="eyebrow">${escapeHtml(display.group)}</p>
+          <h2>${escapeHtml(display.label)}</h2>
         </div>
       </div>
-      <p>${escapeHtml(part.summary)}</p>
+      <p>${escapeHtml(display.summary)}</p>
       <div class="tag-row">
-        ${part.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+        ${display.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
       </div>
       <div class="dock-actions">
-        <a class="primary-link" href="#part/${part.id}">${iconMarkup("mdi:book-open-page-variant", "action-icon")} Open full page</a>
-        <a class="ghost-link" href="#neurons">${iconMarkup("mdi:transit-connection-variant", "action-icon")} Neuron basics</a>
+        <a class="primary-link" href="#part/${part.id}">${iconMarkup("mdi:book-open-page-variant", "action-icon")} ${escapeHtml(tr("openFullPage"))}</a>
+        <a class="ghost-link" href="#neurons">${iconMarkup("mdi:transit-connection-variant", "action-icon")} ${escapeHtml(tr("neuronBasics"))}</a>
       </div>
     </article>
 
     <div class="info-grid console-modules" style="${partStyle(part)}">
       ${renderFactCard({
-        title: "Main job",
+        title: tr("mainJob"),
         icon: FACT_ICONS.job,
-        body: part.quick,
-        detail: part.deep.physiology
+        body: display.quick,
+        detail: display.deep.physiology
       })}
       ${renderFactCard({
-        title: "Student signal",
+        title: tr("studentSignal"),
         icon: FACT_ICONS.signal,
-        body: part.studentCue,
-        detail: part.deep.anatomy
+        body: display.studentCue,
+        detail: display.deep.anatomy
       })}
       ${renderFactCard({
-        title: "Clinical hook",
+        title: tr("clinicalHook"),
         icon: FACT_ICONS.clinical,
-        body: part.clinical,
-        detail: part.deep.medical
+        body: display.clinical,
+        detail: display.deep.medical
       })}
       ${renderFactCard({
-        title: "Connects with",
+        title: tr("connectsWith"),
         icon: FACT_ICONS.connections,
-        list: part.connections,
-        detail: interestingFact(part)
+        list: display.connections,
+        detail: currentInterestingFact(part)
       })}
     </div>
   `;
@@ -821,8 +1250,8 @@ function renderRoute() {
     els.atlasScreen.hidden = false;
     els.articleScreen.hidden = true;
     els.topbarActions.hidden = false;
-    els.eyebrow.textContent = "Interactive neuroanatomy";
-    els.pageTitle.textContent = "3D Brain Structure Atlas";
+    els.eyebrow.textContent = tr("atlasEyebrow");
+    els.pageTitle.textContent = tr("atlasTitle");
     resizeRenderer();
     applyAos();
     return;
@@ -835,16 +1264,16 @@ function renderRoute() {
   hideCallout();
 
   if (route === "neurons") {
-    els.eyebrow.textContent = "Cellular foundation";
-      els.pageTitle.textContent = "Neurons And Signaling";
+    els.eyebrow.textContent = tr("neuronsEyebrow");
+      els.pageTitle.textContent = tr("neuronsTitle");
       renderNeuronsPage();
       applyAos(els.articleScreen);
       return;
     }
 
   if (route === "study") {
-    els.eyebrow.textContent = "Teaching mode";
-    els.pageTitle.textContent = "Student Study Board";
+    els.eyebrow.textContent = tr("studyEyebrow");
+    els.pageTitle.textContent = tr("studyTitle");
     renderStudyPage();
     applyAos(els.articleScreen);
     return;
@@ -855,8 +1284,9 @@ function renderRoute() {
     const part = PART_MAP.get(partId);
     if (part) {
       setSelectedPart(part.id);
-      els.eyebrow.textContent = part.group;
-      els.pageTitle.textContent = `${part.label} Deep Dive`;
+      const display = currentPart(part);
+      els.eyebrow.textContent = display.group;
+      els.pageTitle.textContent = `${display.label} ${tr("deepDive")}`;
       renderPartArticle(part);
       applyAos(els.articleScreen);
       return;
@@ -901,6 +1331,7 @@ function applyAos(root = document) {
 }
 
 function renderPartArticle(part) {
+  const display = currentPart(part);
   const related = PARTS
     .filter((candidate) => candidate.id !== part.id)
     .filter((candidate) => candidate.connections.some((connection) => part.connections.includes(connection)) || candidate.group === part.group)
@@ -910,41 +1341,41 @@ function renderPartArticle(part) {
     <div class="article-layout" style="${partStyle(part)}">
       <section class="article-hero">
         <article class="article-panel">
-          <p class="article-kicker">${escapeHtml(part.group)}</p>
-          <h2>${escapeHtml(part.label)}</h2>
-          <p class="lede">${escapeHtml(part.summary)}</p>
+          <p class="article-kicker">${escapeHtml(display.group)}</p>
+          <h2>${escapeHtml(display.label)}</h2>
+          <p class="lede">${escapeHtml(display.summary)}</p>
           <div class="tag-row">
-            ${part.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+            ${display.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
           </div>
           <div class="metric-strip">
             <div class="metric">
-              <small>Best anchor</small>
-              <strong>${escapeHtml(part.tags[0])}</strong>
+              <small>${escapeHtml(tr("bestAnchor"))}</small>
+              <strong>${escapeHtml(display.tags[0])}</strong>
             </div>
             <div class="metric">
-              <small>System</small>
-              <strong>${escapeHtml(part.group)}</strong>
+              <small>${escapeHtml(tr("system"))}</small>
+              <strong>${escapeHtml(display.group)}</strong>
             </div>
             <div class="metric">
-              <small>Exam lens</small>
-              <strong>${escapeHtml(part.studentCue.split(",")[0])}</strong>
+              <small>${escapeHtml(tr("examLens"))}</small>
+              <strong>${escapeHtml(display.studentCue.split(",")[0])}</strong>
             </div>
           </div>
           <div class="dock-actions">
-            <a class="primary-link" href="#atlas">Back to 3D atlas</a>
-            <a class="ghost-link" href="#study">Study board</a>
+            <a class="primary-link" href="#atlas">${escapeHtml(tr("backAtlas"))}</a>
+            <a class="ghost-link" href="#study">${escapeHtml(tr("studyBoard"))}</a>
           </div>
         </article>
 
         <aside class="article-panel">
-          <h2>Signal Path</h2>
+          <h2>${escapeHtml(tr("signalPath"))}</h2>
           <div class="pathway-map">
-            ${part.deep.pathway.map((step, index) => `
+            ${display.deep.pathway.map((step, index) => `
               <div class="path-step">
                 <span>${index + 1}</span>
                 <div>
                   <strong>${escapeHtml(step)}</strong>
-                  <small>${index === 0 ? "Input" : index === part.deep.pathway.length - 1 ? "Output" : "Processing"}</small>
+                  <small>${index === 0 ? tr("input") : index === display.deep.pathway.length - 1 ? tr("output") : tr("processing")}</small>
                 </div>
               </div>
             `).join("")}
@@ -954,34 +1385,34 @@ function renderPartArticle(part) {
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>Anatomy</h3>
-          <p>${escapeHtml(part.deep.anatomy)}</p>
+          <h3>${escapeHtml(tr("anatomy"))}</h3>
+          <p>${escapeHtml(display.deep.anatomy)}</p>
         </article>
         <article class="note-block">
-          <h3>Physiology</h3>
-          <p>${escapeHtml(part.deep.physiology)}</p>
+          <h3>${escapeHtml(tr("physiology"))}</h3>
+          <p>${escapeHtml(display.deep.physiology)}</p>
         </article>
         <article class="note-block">
-          <h3>Psychology Lens</h3>
-          <p>${escapeHtml(part.deep.psychology)}</p>
+          <h3>${escapeHtml(tr("psychologyLens"))}</h3>
+          <p>${escapeHtml(display.deep.psychology)}</p>
         </article>
       </section>
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>Clinical Pattern</h3>
-          <p>${escapeHtml(part.deep.medical)}</p>
+          <h3>${escapeHtml(tr("clinicalPattern"))}</h3>
+          <p>${escapeHtml(display.deep.medical)}</p>
         </article>
         <article class="note-block">
-          <h3>Connections</h3>
+          <h3>${escapeHtml(tr("connections"))}</h3>
           <ul>
-            ${part.connections.map((connection) => `<li>${escapeHtml(connection)}</li>`).join("")}
+            ${display.connections.map((connection) => `<li>${escapeHtml(connection)}</li>`).join("")}
           </ul>
         </article>
         <article class="note-block">
-          <h3>Related Structures</h3>
+          <h3>${escapeHtml(tr("relatedStructures"))}</h3>
           <ul>
-            ${related.map((item) => `<li><a href="#part/${item.id}">${escapeHtml(item.label)}</a></li>`).join("") || "<li>Use the atlas to compare nearby systems.</li>"}
+            ${related.map((item) => `<li><a href="#part/${item.id}">${escapeHtml(currentPart(item).label)}</a></li>`).join("") || `<li>${escapeHtml(tr("relatedFallback"))}</li>`}
           </ul>
         </article>
       </section>
@@ -994,69 +1425,66 @@ function renderNeuronsPage() {
     <div class="article-layout">
       <section class="article-hero">
         <article class="article-panel">
-          <p class="article-kicker">${iconMarkup("mdi:dna", "article-kicker-icon")} Neuron basics</p>
-          <h2>The unit that makes networks possible</h2>
-          <p class="lede">Neurons receive signals, integrate them, fire action potentials, and communicate across synapses. The brain is not only its parts; it is also the timing and chemistry between cells.</p>
+          <p class="article-kicker">${iconMarkup("mdi:dna", "article-kicker-icon")} ${escapeHtml(tr("neuronKicker"))}</p>
+          <h2>${escapeHtml(tr("neuronHeading"))}</h2>
+          <p class="lede">${escapeHtml(tr("neuronLead"))}</p>
           <div class="metric-strip">
             <div class="metric">
-              <small>Input</small>
-              <strong>Dendrites</strong>
+              <small>${escapeHtml(tr("input"))}</small>
+              <strong>${escapeHtml(tr("dendrites"))}</strong>
             </div>
             <div class="metric">
-              <small>Decision point</small>
-              <strong>Axon hillock</strong>
+              <small>${escapeHtml(tr("decisionPoint"))}</small>
+              <strong>${escapeHtml(tr("axonHillock"))}</strong>
             </div>
             <div class="metric">
-              <small>Output</small>
-              <strong>Synapse</strong>
+              <small>${escapeHtml(tr("output"))}</small>
+              <strong>${escapeHtml(tr("synapse"))}</strong>
             </div>
           </div>
         </article>
         <figure class="neuron-figure" data-aos="fade-left" aria-label="Realistic neuron render">
           <img src="./assets/neuron-render.png" alt="Realistic 3D neuron with dendrites, soma, axon, myelin segments, and synaptic terminals">
           <figcaption>
-            <span>dendrites</span>
-            <span>soma</span>
-            <span>axon</span>
-            <span>synapse</span>
+            <span>${escapeHtml(tr("dendrites"))}</span>
+            <span>${escapeHtml(tr("soma"))}</span>
+            <span>${escapeHtml(tr("axon"))}</span>
+            <span>${escapeHtml(tr("synapse"))}</span>
           </figcaption>
         </figure>
       </section>
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>${iconMarkup("mdi:lightning-bolt-circle", "card-icon")} How a signal moves</h3>
+          <h3>${iconMarkup("mdi:lightning-bolt-circle", "card-icon")} ${escapeHtml(tr("howSignalMoves"))}</h3>
           <ul>
-            <li>Dendrites collect excitatory and inhibitory inputs.</li>
-            <li>The soma integrates those inputs over space and time.</li>
-            <li>If threshold is reached, an action potential travels down the axon.</li>
-            <li>Synapses release neurotransmitters that affect the next cell.</li>
+            ${tr("signalMoveItems").map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
           </ul>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:test-tube", "card-icon")} Neurotransmitters</h3>
-          <p>Glutamate is the major excitatory transmitter. GABA is the major inhibitory transmitter. Dopamine, serotonin, acetylcholine, norepinephrine, and many peptides tune mood, attention, reward, sleep, and movement.</p>
+          <h3>${iconMarkup("mdi:test-tube", "card-icon")} ${escapeHtml(tr("neurotransmitters"))}</h3>
+          <p>${escapeHtml(tr("neurotransmittersBody"))}</p>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:shield-check", "card-icon")} Glia matter</h3>
-          <p>Astrocytes support metabolism and synapses. Oligodendrocytes make CNS myelin. Microglia survey immune threats. Ependymal cells line ventricles and help with CSF flow.</p>
+          <h3>${iconMarkup("mdi:shield-check", "card-icon")} ${escapeHtml(tr("gliaMatter"))}</h3>
+          <p>${escapeHtml(tr("gliaBody"))}</p>
         </article>
       </section>
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>${iconMarkup("mdi:account-group", "card-icon")} For psychology</h3>
-          <p>Behavior changes when synaptic weights change. Learning, reinforcement, fear conditioning, habit, attention, and mood all depend on circuit-level plasticity.</p>
+          <h3>${iconMarkup("mdi:account-group", "card-icon")} ${escapeHtml(tr("forPsychology"))}</h3>
+          <p>${escapeHtml(tr("psychologyBody"))}</p>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:stethoscope", "card-icon")} For medicine</h3>
-          <p>Many disorders are easier to reason through when you separate lesion localization, neurotransmitter effects, conduction speed, inflammation, and network compensation.</p>
+          <h3>${iconMarkup("mdi:stethoscope", "card-icon")} ${escapeHtml(tr("forMedicine"))}</h3>
+          <p>${escapeHtml(tr("medicineBody"))}</p>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:map-marker", "card-icon")} Best next step</h3>
-          <p>Use the atlas to connect cells to systems: hippocampal neurons bind memory, cerebellar circuits tune error, and frontal loops select behavior.</p>
+          <h3>${iconMarkup("mdi:map-marker", "card-icon")} ${escapeHtml(tr("bestNextStep"))}</h3>
+          <p>${escapeHtml(tr("bestNextBody"))}</p>
           <div class="dock-actions">
-            <a class="primary-link" href="#atlas">Open atlas</a>
+            <a class="primary-link" href="#atlas">${escapeHtml(tr("openAtlas"))}</a>
           </div>
         </article>
       </section>
@@ -1069,64 +1497,61 @@ function renderStudyPage() {
     <div class="article-layout">
       <section class="article-hero">
         <article class="article-panel">
-          <p class="article-kicker">${iconMarkup("mdi:notebook", "article-kicker-icon")} Study mode</p>
-          <h2>Use structure, function, lesion, and pathway together</h2>
-          <p class="lede">Students remember neuroanatomy better when every structure has a role, a clinical pattern, and a pathway. This board keeps those four pieces visible.</p>
+          <p class="article-kicker">${iconMarkup("mdi:notebook", "article-kicker-icon")} ${escapeHtml(tr("studyMode"))}</p>
+          <h2>${escapeHtml(tr("studyHeading"))}</h2>
+          <p class="lede">${escapeHtml(tr("studyLead"))}</p>
           <div class="dock-actions">
-            <a class="primary-link" href="#atlas">Return to 3D model</a>
-            <a class="ghost-link" href="#neurons">Review neurons</a>
+            <a class="primary-link" href="#atlas">${escapeHtml(tr("returnModel"))}</a>
+            <a class="ghost-link" href="#neurons">${escapeHtml(tr("reviewNeurons"))}</a>
           </div>
         </article>
         <article class="article-panel">
-          <h2>${iconMarkup("mdi:checklist", "article-title-icon")} Mini Method</h2>
+          <h2>${iconMarkup("mdi:checklist", "article-title-icon")} ${escapeHtml(tr("miniMethod"))}</h2>
           <div class="pathway-map">
-            <div class="path-step"><span>1</span><div><strong>Locate</strong><small>Where is the structure?</small></div></div>
-            <div class="path-step"><span>2</span><div><strong>Assign</strong><small>What does it help compute?</small></div></div>
-            <div class="path-step"><span>3</span><div><strong>Predict</strong><small>What happens if it fails?</small></div></div>
-            <div class="path-step"><span>4</span><div><strong>Connect</strong><small>Which pathway explains it?</small></div></div>
+            <div class="path-step"><span>1</span><div><strong>${escapeHtml(tr("locate"))}</strong><small>${escapeHtml(tr("locateHint"))}</small></div></div>
+            <div class="path-step"><span>2</span><div><strong>${escapeHtml(tr("assign"))}</strong><small>${escapeHtml(tr("assignHint"))}</small></div></div>
+            <div class="path-step"><span>3</span><div><strong>${escapeHtml(tr("predict"))}</strong><small>${escapeHtml(tr("predictHint"))}</small></div></div>
+            <div class="path-step"><span>4</span><div><strong>${escapeHtml(tr("connect"))}</strong><small>${escapeHtml(tr("connectHint"))}</small></div></div>
           </div>
         </article>
       </section>
 
       <section class="study-grid">
         <article class="study-panel">
-          <h3>${iconMarkup("mdi:briefcase-medical", "card-icon")} Clinical prompts</h3>
+          <h3>${iconMarkup("mdi:briefcase-medical", "card-icon")} ${escapeHtml(tr("clinicalPrompts"))}</h3>
           <ul>
-            <li>Personality change plus poor inhibition: compare frontal lobe and limbic circuits.</li>
-            <li>New memory formation is impaired: inspect hippocampus and medial temporal lobe.</li>
-            <li>Unsteady gait and intention tremor: inspect cerebellum.</li>
-            <li>Contralateral visual field loss: inspect occipital cortex and optic radiations.</li>
+            ${tr("clinicalPromptItems").map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
           </ul>
         </article>
         <article class="study-panel">
-          <h3>${iconMarkup("mdi:brain", "card-icon")} Psychology prompts</h3>
+          <h3>${iconMarkup("mdi:brain", "card-icon")} ${escapeHtml(tr("psychologyPrompts"))}</h3>
           <ul>
-            <li>Fear conditioning: limbic system, amygdala, hippocampus, and prefrontal regulation.</li>
-            <li>Working memory: prefrontal cortex with parietal attention networks.</li>
-            <li>Language comprehension: temporal lobe networks.</li>
-            <li>Embodied attention: parietal body-space maps.</li>
+            ${tr("psychologyPromptItems").map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
           </ul>
         </article>
       </section>
 
       <section class="study-panel">
-        <h3>${iconMarkup("mdi:chart-bar", "card-icon")} Fast compare</h3>
+        <h3>${iconMarkup("mdi:chart-bar", "card-icon")} ${escapeHtml(tr("fastCompare"))}</h3>
         <table class="compare-table">
           <thead>
             <tr>
-              <th>Structure</th>
-              <th>Core function</th>
-              <th>Failure pattern</th>
+              <th>${escapeHtml(tr("structure"))}</th>
+              <th>${escapeHtml(tr("coreFunction"))}</th>
+              <th>${escapeHtml(tr("failurePattern"))}</th>
             </tr>
           </thead>
           <tbody>
-            ${PARTS.map((part) => `
+            ${PARTS.map((part) => {
+              const display = currentPart(part);
+              return `
               <tr>
-                <td><a href="#part/${part.id}">${escapeHtml(part.label)}</a></td>
-                <td>${escapeHtml(part.quick)}</td>
-                <td>${escapeHtml(part.clinical)}</td>
+                <td><a href="#part/${part.id}">${escapeHtml(display.label)}</a></td>
+                <td>${escapeHtml(display.quick)}</td>
+                <td>${escapeHtml(display.clinical)}</td>
               </tr>
-            `).join("")}
+            `;
+            }).join("")}
           </tbody>
         </table>
       </section>
@@ -1188,8 +1613,23 @@ els.viewButtons.forEach((button) => {
   });
 });
 
+els.langButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.lang = button.dataset.lang;
+    localStorage.setItem("brainAtlasLang", state.lang);
+    renderStaticText();
+    renderPartsList();
+    renderBrainHotspots();
+    renderInfoDock(PART_MAP.get(state.selectedPartId));
+    updateLegend(PART_MAP.get(state.selectedPartId));
+    updateModelStatus();
+    renderRoute();
+  });
+});
+
 window.addEventListener("hashchange", renderRoute);
 
+renderStaticText();
 renderPartsList();
 renderBrainHotspots();
 renderInfoDock(PART_MAP.get(state.selectedPartId));
@@ -1211,7 +1651,7 @@ async function initThree() {
   } catch (error) {
     console.error(error);
     state.threeReady = false;
-    els.modelStatus.textContent = "3D engine unavailable";
+    els.modelStatus.textContent = tr("unavailableStatus");
     drawFallbackBrain();
   }
 }
@@ -1811,12 +2251,12 @@ function updateModelStatus() {
   els.stagePanel.dataset.view = state.viewMode;
   if (!state.threeReady) return;
   const labels = {
-    full: "Full cortical model",
-    half: "Sagittal half view",
-    inside: "Internal systems emphasized",
-    split: "Separated structure view"
+    full: tr("fullStatus"),
+    half: tr("halfStatus"),
+    inside: tr("insideStatus"),
+    split: tr("splitStatus")
   };
-  els.modelStatus.textContent = labels[state.viewMode] || "3D model ready";
+  els.modelStatus.textContent = labels[state.viewMode] || tr("readyStatus");
 }
 
 function drawFallbackBrain() {

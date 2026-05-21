@@ -13,8 +13,8 @@
         <a class="brand" href="#atlas" aria-label="Brain Atlas 2120 home">
           <span class="brand-mark" aria-hidden="true"></span>
           <span>
-            <strong>Brain Atlas</strong>
-            <small>psychology + medicine</small>
+            <strong id="brandTitle">Brain Atlas</strong>
+            <small id="brandSubtitle">psychology + medicine</small>
           </span>
         </a>
 
@@ -25,12 +25,12 @@
         </nav>
 
         <div class="search-box">
-          <label for="partSearch"><iconify-icon icon="mdi:magnify" aria-hidden="true"></iconify-icon> Find a structure</label>
+          <label id="partSearchLabel" for="partSearch"><iconify-icon icon="mdi:magnify" aria-hidden="true"></iconify-icon> Find a structure</label>
           <input id="partSearch" type="search" autocomplete="off" placeholder="frontal, memory, vision">
         </div>
 
         <div class="part-list-heading">
-          <span>Structures</span>
+          <span id="structuresLabel">Structures</span>
           <span id="partCount">0</span>
         </div>
         <div id="partsList" class="parts-list" role="list"></div>
@@ -42,11 +42,17 @@
             <p id="eyebrow" class="eyebrow">Interactive neuroanatomy</p>
             <h1 id="pageTitle">3D Brain Structure Atlas</h1>
           </div>
-          <div class="topbar-actions" aria-label="Atlas view controls">
-            <button class="control-btn is-active" type="button" data-view="full" title="Show the full brain">Full</button>
-            <button class="control-btn" type="button" data-view="half" title="Open a sagittal half view">Half</button>
-            <button class="control-btn" type="button" data-view="inside" title="Fade cortex and reveal internal parts">Inside</button>
-            <button class="control-btn" type="button" data-view="split" title="Separate the major structures">Split</button>
+          <div class="topbar-controls">
+            <div class="language-switcher" aria-label="Language switcher">
+              <button class="lang-btn is-active" type="button" data-lang="en">EN</button>
+              <button class="lang-btn" type="button" data-lang="ka">KA</button>
+            </div>
+            <div class="topbar-actions" aria-label="Atlas view controls">
+              <button class="control-btn is-active" type="button" data-view="full" title="Show the full brain">Full</button>
+              <button class="control-btn" type="button" data-view="half" title="Open a sagittal half view">Half</button>
+              <button class="control-btn" type="button" data-view="inside" title="Fade cortex and reveal internal parts">Inside</button>
+              <button class="control-btn" type="button" data-view="split" title="Separate the major structures">Split</button>
+            </div>
           </div>
         </header>
 
@@ -65,7 +71,7 @@
             <div class="legend-card" aria-label="Selected structure">
               <span id="legendAccent" class="legend-accent"></span>
               <div>
-                <small>Selected</small>
+                <small id="selectedLabel">Selected</small>
                 <strong id="legendTitle">Frontal Lobe</strong>
               </div>
             </div>

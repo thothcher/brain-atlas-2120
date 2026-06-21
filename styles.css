@@ -1841,7 +1841,7 @@ h1 {
     height: auto;
     min-height: 0;
     overflow: visible;
-    grid-template-rows: minmax(430px, 58vh) auto;
+    grid-template-rows: minmax(300px, 44vh) auto;
     padding: 0 0 14px;
   }
 
@@ -1850,7 +1850,7 @@ h1 {
   }
 
   .stage-panel {
-    min-height: 430px;
+    min-height: 300px;
   }
 
   .brain-render,
@@ -1902,6 +1902,14 @@ h1 {
 
   .region-long-grid {
     grid-template-columns: 1fr;
+  }
+
+  .atlas-screen {
+    grid-template-rows: minmax(260px, 40vh) auto;
+  }
+
+  .stage-panel {
+    min-height: 260px;
   }
 }
 

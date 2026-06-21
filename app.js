@@ -213,7 +213,8 @@ const state = {
   calloutVisible: false,
   calloutAnchor: null,
   diving: false,
-  infoExpanded: false
+  infoExpanded: false,
+  neuronFocus: null
 };
 
 const els = {
@@ -264,6 +265,7 @@ let animationFrameId = 0;
 const clickableMeshes = [];
 const visualEntries = [];
 const regionNodes = [];
+const neuronNodes = [];
 const timeMaterials = [];
 const annotationVector = { target: null };
 let starField;
@@ -274,7 +276,7 @@ let neuronPulse;
 let neuronVesicles;
 const clock = { start: (typeof performance !== "undefined" ? performance.now() : Date.now()) };
 const pointerParallax = { x: 0, y: 0, tx: 0, ty: 0 };
-const cameraRig = { baseZ: 3.9, targetZ: 3.9, diveZ: 1.55 };
+const cameraRig = { baseZ: 4.15, targetZ: 4.15, baseDefault: 4.15, diveZ: 1.55 };
 const diveState = { t: 0, target: 0 };
 let tmpVec;
 let nodeCenter;
@@ -701,6 +703,13 @@ const UI_TEXT = {
     axonHillock: "Axon hillock",
     axon: "Axon",
     synapse: "Synapse",
+    neuronPart: "Neuron part",
+    neuronTapHint: "Tap a dot to see what each part does.",
+    dendritesDesc: "Branching antennae that receive signals from other neurons and carry them inward toward the soma.",
+    somaDesc: "The cell body. It sums all incoming excitatory and inhibitory signals and keeps the neuron alive.",
+    axonHillockDesc: "The decision point. If the summed signal crosses threshold here, an action potential fires.",
+    axonDesc: "The cable that carries the action potential away from the soma; myelin segments speed conduction.",
+    synapseDesc: "The axon terminal releases neurotransmitters across the gap to influence the next cell.",
     howSignalMoves: "How a signal moves",
     signalMoveItems: [
       "Dendrites collect excitatory and inhibitory inputs.",
@@ -839,6 +848,13 @@ const UI_TEXT = {
     axonHillock: "აქსონის ბორცვი",
     axon: "აქსონი",
     synapse: "სინაფსი",
+    neuronPart: "ნეირონის ნაწილი",
+    neuronTapHint: "დააჭირე წერტილს, რომ ნახო თითოეული ნაწილი რას აკეთებს.",
+    dendritesDesc: "განშტოებული ანტენები, რომლებიც სხვა ნეირონებისგან იღებენ სიგნალებს და სომისკენ ატარებენ.",
+    somaDesc: "უჯრედის სხეული. აჯამებს ყველა შემავალ აღმგზნებ და დამთრგუნველ სიგნალს და ნეირონს აცოცხლებს.",
+    axonHillockDesc: "გადაწყვეტის წერტილი. თუ ჯამური სიგნალი აქ ზღურბლს გადააჭარბებს, ისვრება მოქმედების პოტენციალი.",
+    axonDesc: "კაბელი, რომელიც მოქმედების პოტენციალს სომიდან გაჰყავს; მიელინის სეგმენტები აჩქარებენ გატარებას.",
+    synapseDesc: "აქსონის ბოლო გამოყოფს ნეიროტრანსმიტერებს ნაპრალში, რომ შემდეგ უჯრედზე იმოქმედოს.",
     howSignalMoves: "როგორ მოძრაობს სიგნალი",
     signalMoveItems: [
       "დენდრიტები აგროვებენ აღმგზნებ და შემაკავებელ სიგნალებს.",
@@ -1034,19 +1050,55 @@ function tr(key) {
   return UI_TEXT[state.lang]?.[key] ?? UI_TEXT.en[key] ?? key;
 }
 
+let EN_TO_KA_TERM = null;
+function buildTermDict() {
+  EN_TO_KA_TERM = {};
+  Object.keys(KA_PARTS).forEach((id) => {
+    const en = PART_MAP.get(id);
+    if (en && KA_PARTS[id].label) EN_TO_KA_TERM[en.label.toLowerCase().trim()] = KA_PARTS[id].label;
+  });
+  // Common connection/pathway terms that are not standalone atlas parts.
+  Object.assign(EN_TO_KA_TERM, {
+    "dopamine systems": "დოფამინური სისტემები",
+    "cranial nerves": "კრანიალური ნერვები",
+    "spinal cord": "ზურგის ტვინი",
+    "autonomic system": "ავტონომიური სისტემა",
+    "vestibular nuclei": "ვესტიბულური ბირთვები",
+    "language network": "ენის ქსელი",
+    "motor cortex": "მოტორული ქერქი",
+    "somatosensory cortex": "სომატოსენსორული ქერქი",
+    "visual association cortex": "ვიზუალური ასოციაციური ქერქი"
+  });
+}
+
+function translateTerm(text) {
+  if (state.lang !== "ka") return text;
+  if (!EN_TO_KA_TERM) buildTermDict();
+  return EN_TO_KA_TERM[String(text).toLowerCase().trim()] || text;
+}
+
 function currentPart(part) {
   if (state.lang !== "ka") return part;
   const translated = KA_PARTS[part.id];
   if (!translated) return part;
+  // KA_PARTS only carries the summary-level fields, so rebuild the full
+  // deep-dive content (shown on the expanded article page) in Georgian
+  // rather than letting it fall back to English.
+  const deep = {
+    anatomy: (translated.deep && translated.deep.anatomy)
+      || `${translated.label} — დაიმახსოვრე მისი მდებარეობა ახლომდებარე სტრუქტურებთან ერთად.`,
+    physiology: (translated.deep && translated.deep.physiology) || translated.summary || part.deep.physiology,
+    psychology: (translated.deep && translated.deep.psychology) || translated.quick || part.deep.psychology,
+    medical: (translated.deep && translated.deep.medical) || translated.clinical || part.deep.medical,
+    pathway: (translated.deep && translated.deep.pathway)
+      || (part.deep.pathway || []).map(translateTerm)
+  };
   return {
     ...part,
     ...translated,
-    connections: translated.connections || part.connections,
+    connections: translated.connections || (part.connections || []).map(translateTerm),
     tags: translated.tags || part.tags,
-    deep: {
-      ...part.deep,
-      ...(translated.deep || {})
-    }
+    deep
   };
 }
 
@@ -1824,7 +1876,7 @@ function setupScene() {
   controls.autoRotateSpeed = 0.16;
   controls.enablePan = false;
   controls.minDistance = 1.2;
-  controls.maxDistance = 8;
+  controls.maxDistance = 12;
   controls.target.set(0, 0.12, 0);
   controls.update();
 
@@ -2077,8 +2129,10 @@ function createNeuronModel() {
   const accent = 0x9fb4c9;
   neuronGroup = new THREE.Group();
   neuronGroup.visible = false;
-  neuronGroup.position.set(-0.7, 0.05, 0);
-  neuronGroup.scale.setScalar(0.7);
+  // Centered on the orbit target so the whole cell (dendrites -> axon
+  // terminal) stays in frame instead of running off the left/right edges.
+  neuronGroup.position.set(-0.36, 0.08, 0);
+  neuronGroup.scale.setScalar(0.62);
   scene.add(neuronGroup);
 
   const soma = new THREE.Mesh(createOrganicGeometry(7), neuronHolo(accent, 0.5, 2.0));
@@ -2148,6 +2202,51 @@ function createNeuronModel() {
   const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), neuronPulseMat);
   neuronGroup.add(pulse);
   neuronPulse = { mesh: pulse, curve: axonCurve };
+
+  createNeuronNodes(axonCurve);
+}
+
+// Teaching dots for the neuron parts (dendrites, soma, axon hillock, axon,
+// synapse). Each rides along with the neuron and explains what it does.
+const NEURON_NODE_DEFS = [
+  { key: "dendrites", color: 0x8ecae6, pos: [-0.55, 0.52, 0.16] },
+  { key: "soma", color: 0xffd166, pos: [-0.2, -0.02, 0] },
+  { key: "axonHillock", color: 0xff9f6b, pos: [0.24, 0, 0] },
+  { key: "axon", color: 0x9b8cff, pos: [1.25, -0.02, 0] },
+  { key: "synapse", color: 0xff70a6, posFromAxonEnd: true }
+];
+
+function createNeuronNodes(axonCurve) {
+  const geometry = new THREE.PlaneGeometry(1, 1);
+  NEURON_NODE_DEFS.forEach((def) => {
+    const material = makeNodeMaterial(def.color);
+    material.userData.world = "neuron";
+    material.uniforms.uWorld.value = 0;
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 14;
+    mesh.userData.neuronKey = def.key;
+    mesh.visible = false;
+    scene.add(mesh);
+    const localPos = def.posFromAxonEnd ? axonCurve.getPoint(1) : new THREE.Vector3(...def.pos);
+    neuronNodes.push({ mesh, material, key: def.key, localPos, phase: Math.random() * Math.PI * 2 });
+  });
+}
+
+function updateNeuronNodes(t) {
+  if (!neuronNodes.length || !camera || !neuronGroup) return;
+  const dist = camera.position.distanceTo(controls.target);
+  const pixelScale = dist * 0.02;
+  neuronNodes.forEach((node) => {
+    node.mesh.visible = neuronGroup.visible;
+    node.mesh.position.copy(neuronGroup.localToWorld(node.localPos.clone()));
+    const active = node.key === state.neuronFocus ? 1 : 0;
+    const u = node.material.uniforms;
+    u.uActive.value += (active - u.uActive.value) * 0.12;
+    const pulse = 1 + Math.sin(t * 2.2 + node.phase) * 0.08 + active * 0.5;
+    const s = pixelScale * pulse;
+    node.mesh.scale.set(s, s, s);
+    node.mesh.quaternion.copy(camera.quaternion);
+  });
 }
 
 function updateNeuron(t) {
@@ -2174,6 +2273,7 @@ function startDive() {
 function endDive() {
   if (!state.diving) return;
   state.diving = false;
+  state.neuronFocus = null;
   diveState.target = 0;
   if (controls) {
     controls.autoRotate = !prefersReducedMotion;
@@ -2197,11 +2297,49 @@ function updateDiveUI() {
 
 function renderNeuronCaption() {
   if (!els.neuronCaption) return;
+  if (state.neuronFocus) {
+    els.neuronCaption.innerHTML = `
+      <small>${escapeHtml(tr("neuronPart"))}</small>
+      <strong>${escapeHtml(tr(state.neuronFocus))}</strong>
+      <p>${escapeHtml(tr(`${state.neuronFocus}Desc`))}</p>
+    `;
+    return;
+  }
   els.neuronCaption.innerHTML = `
     <small>${escapeHtml(tr("neuronsEyebrow"))}</small>
     <strong>${escapeHtml(tr("neuronDiveTitle"))}</strong>
-    <p>${escapeHtml(tr("neuronDiveLead"))}</p>
+    <p>${escapeHtml(tr("neuronTapHint"))}</p>
   `;
+}
+
+const NEURON_NODE_COLOR = {
+  dendrites: "#8ecae6", soma: "#ffd166", axonHillock: "#ff9f6b",
+  axon: "#9b8cff", synapse: "#ff70a6"
+};
+
+function setNeuronFocus(key) {
+  state.neuronFocus = key;
+  renderNeuronCaption();
+}
+
+function pickNeuronNode(event) {
+  if (!raycaster || !camera) return null;
+  const rect = els.canvas.getBoundingClientRect();
+  pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(pointer, camera);
+  const meshes = neuronNodes.filter((n) => n.mesh.visible).map((n) => n.mesh);
+  const hit = raycaster.intersectObjects(meshes, false)[0];
+  return hit ? hit.object : null;
+}
+
+function showNeuronTip(key, x, y) {
+  if (!els.nodeTip) return;
+  els.nodeTip.textContent = tr(key);
+  els.nodeTip.style.setProperty("--part-color", NEURON_NODE_COLOR[key] || "#9fb4c9");
+  els.nodeTip.style.left = `${x}px`;
+  els.nodeTip.style.top = `${y}px`;
+  els.nodeTip.classList.add("is-visible");
 }
 
 function createOrganicPart(layout) {
@@ -2217,7 +2355,7 @@ function createOrganicPart(layout) {
   mesh.userData.clickable = true;
 
   const glow = new THREE.Mesh(geometry.clone(), makeGlowMaterial(part.color));
-  glow.scale.setScalar(1.12);
+  glow.scale.setScalar(1.13);
   glow.userData.partId = part.id;
   mesh.add(glow);
 
@@ -2484,10 +2622,13 @@ const HOLO_FRAG = `
     vec3 n = normalize(vNormalW);
     vec3 v = normalize(vViewDir);
     float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), uRimPower);
+    // Crisp contour band along each region's silhouette so parts read as
+    // distinct, outlined shapes rather than blending into one glass blob.
+    float edge = smoothstep(0.62, 0.97, fres);
     float scan = 1.0 - 0.05 * (0.5 + 0.5 * sin(vWorldPos.y * 38.0 - uTime * 1.4));
-    float fill = 0.12 + 0.45 * uActive;
-    float alpha = (fres * (0.85 + 0.4 * uActive) + fill) * uOpacity * scan * uWorld;
-    vec3 col = uColor * (0.8 + 0.85 * fres + 0.7 * uActive);
+    float fill = 0.1 + 0.32 * uActive;
+    float alpha = (fres * (0.85 + 0.35 * uActive) + edge * (0.5 + 0.35 * uActive) + fill) * uOpacity * scan * uWorld;
+    vec3 col = uColor * (0.82 + 0.8 * fres + 0.45 * uActive) + edge * (0.32 + 0.4 * uActive);
     gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -2507,9 +2648,13 @@ const GLOW_FRAG = `
   void main() {
     vec3 n = normalize(vNormalW);
     vec3 v = normalize(vViewDir);
-    float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);
-    float alpha = fres * uActive * 0.9 * uWorld;
-    gl_FragColor = vec4(uColor, clamp(alpha, 0.0, 1.0));
+    float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.6);
+    // Soft, breathing halo around the selected region (kept restrained).
+    float pulse = 0.85 + 0.15 * sin(uTime * 2.0);
+    float halo = fres + 0.06;
+    float alpha = halo * uActive * 0.8 * pulse * uWorld;
+    vec3 col = mix(uColor, vec3(1.0), 0.28);
+    gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
   }
 `;
 
@@ -2661,7 +2806,11 @@ function updateMeshTargets() {
 }
 
 function onCanvasClick(event) {
-  if (state.diving) return;
+  if (state.diving) {
+    const node = pickNeuronNode(event);
+    setNeuronFocus(node ? node.userData.neuronKey : null);
+    return;
+  }
   const hit = pickPart(event);
   if (!hit) {
     hideCallout();
@@ -2675,8 +2824,13 @@ function onCanvasPointerMove(event) {
   pointerParallax.tx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   pointerParallax.ty = ((event.clientY - rect.top) / rect.height) * 2 - 1;
   if (state.diving) {
-    els.canvas.style.cursor = "grab";
-    hideNodeTip();
+    const node = pickNeuronNode(event);
+    els.canvas.style.cursor = node ? "pointer" : "grab";
+    if (node) {
+      showNeuronTip(node.userData.neuronKey, event.clientX - rect.left, event.clientY - rect.top);
+    } else {
+      hideNodeTip();
+    }
     return;
   }
   const hit = pickPart(event);
@@ -2719,8 +2873,23 @@ function resizeRenderer() {
   const width = Math.max(320, Math.floor(rect.width));
   const height = Math.max(320, Math.floor(rect.height));
   renderer.setSize(width, height, false);
-  camera.aspect = width / height;
+  const aspect = width / height;
+  camera.aspect = aspect;
   camera.updateProjectionMatrix();
+
+  // Keep the whole subject in frame: pull the camera back on narrow/portrait
+  // stages (mobile) so the full shape is readable instead of overflowing.
+  // The neuron is much wider than the brain, so it needs more distance.
+  const fit = (base) => {
+    let z = base;
+    if (aspect < 1) z = z / Math.max(0.55, aspect);
+    if (width < 700) z += 0.35;
+    return z;
+  };
+  cameraRig.baseZ = Math.min(7, fit(cameraRig.baseDefault));
+  cameraRig.diveZ = Math.min(9, fit(2.9));
+  if (!state.diving) updateMeshTargets();
+
   positionAnnotation();
 }
 
@@ -2758,6 +2927,7 @@ function animateScene() {
 
   updateRegionNodes(t);
   if (neuronGroup && neuronGroup.visible) updateNeuron(t);
+  updateNeuronNodes(t);
   updateParallax();
   updateCameraRig();
 

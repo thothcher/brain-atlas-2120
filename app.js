@@ -202,27 +202,32 @@ const PARTS = [
 ];
 
 const PART_MAP = new Map(PARTS.map((part) => [part.id, part]));
+const initialLang = new URLSearchParams(window.location.search).get("lang");
 
 const state = {
   route: "atlas",
   selectedPartId: "frontal",
   viewMode: "full",
+  lang: ["en", "ka"].includes(initialLang) ? initialLang : localStorage.getItem("brainAtlasLang") || "en",
   threeReady: false,
   calloutVisible: false,
-  calloutAnchor: null
+  calloutAnchor: null,
+  diving: false,
+  infoExpanded: false
 };
 
 const els = {
-  partsList: document.querySelector("#partsList"),
-  partCount: document.querySelector("#partCount"),
-  partSearch: document.querySelector("#partSearch"),
   atlasScreen: document.querySelector("#atlasScreen"),
   articleScreen: document.querySelector("#articleScreen"),
   infoDock: document.querySelector("#infoDock"),
+  brandTitle: document.querySelector("#brandTitle"),
+  brandSubtitle: document.querySelector("#brandSubtitle"),
+  selectedLabel: document.querySelector("#selectedLabel"),
   pageTitle: document.querySelector("#pageTitle"),
   eyebrow: document.querySelector("#eyebrow"),
   topbarActions: document.querySelector(".topbar-actions"),
   viewButtons: Array.from(document.querySelectorAll("[data-view]")),
+  langButtons: Array.from(document.querySelectorAll("[data-lang]")),
   navLinks: Array.from(document.querySelectorAll(".nav-link")),
   stagePanel: document.querySelector(".stage-panel"),
   canvas: document.querySelector("#brainCanvas"),
@@ -232,8 +237,17 @@ const els = {
   brainCallout: document.querySelector("#brainCallout"),
   modelStatus: document.querySelector("#modelStatus"),
   legendTitle: document.querySelector("#legendTitle"),
-  legendAccent: document.querySelector("#legendAccent")
+  legendAccent: document.querySelector("#legendAccent"),
+  diveBtn: document.querySelector("#diveBtn"),
+  neuronCaption: document.querySelector("#neuronCaption"),
+  nodeTip: document.querySelector("#nodeTip"),
+  reviewBadge: document.querySelector("#reviewBadge")
 };
+
+// Per-route headings were removed from the top bar; keep no-op targets so routing stays simple.
+["eyebrow", "pageTitle"].forEach((key) => {
+  if (!els[key]) els[key] = { set textContent(_v) {}, get textContent() { return ""; } };
+});
 
 let THREE;
 let OrbitControls;
@@ -249,7 +263,26 @@ let sagittalPlane;
 let animationFrameId = 0;
 const clickableMeshes = [];
 const visualEntries = [];
+const regionNodes = [];
+const timeMaterials = [];
 const annotationVector = { target: null };
+let starField;
+let brainPivot;
+let neuronGroup;
+let neuronPulseMat;
+let neuronPulse;
+let neuronVesicles;
+const clock = { start: (typeof performance !== "undefined" ? performance.now() : Date.now()) };
+const pointerParallax = { x: 0, y: 0, tx: 0, ty: 0 };
+const cameraRig = { baseZ: 3.9, targetZ: 3.9, diveZ: 1.55 };
+const diveState = { t: 0, target: 0 };
+let tmpVec;
+let nodeCenter;
+let nodeDir;
+let nodeView;
+const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia
+  ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  : false;
 
 const PART_ICONS = {
   frontal: "mdi:gesture-tap",
@@ -580,6 +613,398 @@ const HOTSPOT_PARTS = [
 PARTS.push(...EXTRA_PARTS, ...HOTSPOT_PARTS);
 [...EXTRA_PARTS, ...HOTSPOT_PARTS].forEach((part) => PART_MAP.set(part.id, part));
 
+const UI_TEXT = {
+  en: {
+    brandTitle: "Brain Atlas",
+    brandSubtitle: "psychology + medicine",
+    navAtlas: "Atlas",
+    navNeurons: "Neurons",
+    navStudy: "Study Board",
+    findStructure: "Find a structure",
+    searchPlaceholder: "frontal, memory, vision",
+    structures: "Structures",
+    selected: "Selected",
+    full: "Full",
+    half: "Half",
+    inside: "Inside",
+    split: "Split",
+    fullTitle: "Show the full brain",
+    halfTitle: "Open a sagittal half view",
+    insideTitle: "Fade cortex and reveal internal parts",
+    splitTitle: "Separate the major structures",
+    atlasEyebrow: "Interactive neuroanatomy",
+    atlasTitle: "3D Brain Structure Atlas",
+    neuronsEyebrow: "Cellular foundation",
+    neuronsTitle: "Neurons And Signaling",
+    studyEyebrow: "Teaching mode",
+    studyTitle: "Student Study Board",
+    deepDive: "Deep Dive",
+    noMatch: "No structure matches that search.",
+    openFullPage: "Open full page",
+    neuronBasics: "Neuron basics",
+    mainJob: "Main job",
+    studentSignal: "Student signal",
+    clinicalHook: "Clinical hook",
+    connectsWith: "Connects with",
+    closeNote: "Close structure note",
+    fullStatus: "Full cortical model",
+    halfStatus: "Sagittal half view",
+    insideStatus: "Internal systems emphasized",
+    splitStatus: "Separated structure view",
+    readyStatus: "3D model ready",
+    loadingStatus: "Loading neural display",
+    unavailableStatus: "3D engine unavailable",
+    bestAnchor: "Best anchor",
+    system: "System",
+    examLens: "Exam lens",
+    dive: "Dive",
+    surface: "Surface",
+    neuronDiveTitle: "Inside the neuron",
+    neuronDiveLead: "Signals arrive at dendrites, sum in the soma, and fire down the axon as a moving action potential that releases transmitter at the synapse.",
+    doubleClickHint: "Double-click to expand",
+    addReview: "Add to review",
+    inReview: "In review",
+    reviewKicker: "Spaced review",
+    reviewHeading: "Review what you are about to forget",
+    reviewLead: "Active recall plus spacing beats rereading. Mark regions from the atlas, then return when they come due to retrieve them from memory.",
+    dueNow: "Due now",
+    inQueue: "In queue",
+    method: "Method",
+    spacedRepetition: "Spaced repetition",
+    reviewEmpty: "Your review queue is empty. Open a region in the atlas and tap Add to review.",
+    reviewCaughtUp: "All caught up. Nothing is due right now.",
+    recallPrompt: "Recall this region",
+    recallHint: "Picture its job, location, and what fails when it is damaged, then reveal.",
+    remembered: "Remembered",
+    forgot: "Forgot",
+    reveal: "Reveal",
+    reviewQueue: "Review queue",
+    backAtlas: "Back to 3D atlas",
+    studyBoard: "Study board",
+    signalPath: "Signal Path",
+    input: "Input",
+    output: "Output",
+    processing: "Processing",
+    anatomy: "Anatomy",
+    physiology: "Physiology",
+    psychologyLens: "Psychology Lens",
+    clinicalPattern: "Clinical Pattern",
+    connections: "Connections",
+    relatedStructures: "Related Structures",
+    relatedFallback: "Use the atlas to compare nearby systems.",
+    neuronKicker: "Neuron basics",
+    neuronHeading: "The unit that makes networks possible",
+    neuronLead: "Neurons receive signals, integrate them, fire action potentials, and communicate across synapses. The brain is not only its parts; it is also the timing and chemistry between cells.",
+    decisionPoint: "Decision point",
+    dendrites: "Dendrites",
+    soma: "Soma",
+    axonHillock: "Axon hillock",
+    axon: "Axon",
+    synapse: "Synapse",
+    howSignalMoves: "How a signal moves",
+    signalMoveItems: [
+      "Dendrites collect excitatory and inhibitory inputs.",
+      "The soma integrates those inputs over space and time.",
+      "If threshold is reached, an action potential travels down the axon.",
+      "Synapses release neurotransmitters that affect the next cell."
+    ],
+    neurotransmitters: "Neurotransmitters",
+    neurotransmittersBody: "Glutamate is the major excitatory transmitter. GABA is the major inhibitory transmitter. Dopamine, serotonin, acetylcholine, norepinephrine, and many peptides tune mood, attention, reward, sleep, and movement.",
+    gliaMatter: "Glia matter",
+    gliaBody: "Astrocytes support metabolism and synapses. Oligodendrocytes make CNS myelin. Microglia survey immune threats. Ependymal cells line ventricles and help with CSF flow.",
+    forPsychology: "For psychology",
+    psychologyBody: "Behavior changes when synaptic weights change. Learning, reinforcement, fear conditioning, habit, attention, and mood all depend on circuit-level plasticity.",
+    forMedicine: "For medicine",
+    medicineBody: "Many disorders are easier to reason through when you separate lesion localization, neurotransmitter effects, conduction speed, inflammation, and network compensation.",
+    bestNextStep: "Best next step",
+    bestNextBody: "Use the atlas to connect cells to systems: hippocampal neurons bind memory, cerebellar circuits tune error, and frontal loops select behavior.",
+    openAtlas: "Open atlas",
+    studyMode: "Study mode",
+    studyHeading: "Use structure, function, lesion, and pathway together",
+    studyLead: "Students remember neuroanatomy better when every structure has a role, a clinical pattern, and a pathway. This board keeps those four pieces visible.",
+    returnModel: "Return to 3D model",
+    reviewNeurons: "Review neurons",
+    miniMethod: "Mini Method",
+    locate: "Locate",
+    locateHint: "Where is the structure?",
+    assign: "Assign",
+    assignHint: "What does it help compute?",
+    predict: "Predict",
+    predictHint: "What happens if it fails?",
+    connect: "Connect",
+    connectHint: "Which pathway explains it?",
+    clinicalPrompts: "Clinical prompts",
+    psychologyPrompts: "Psychology prompts",
+    fastCompare: "Fast compare",
+    structure: "Structure",
+    coreFunction: "Core function",
+    failurePattern: "Failure pattern",
+    clinicalPromptItems: [
+      "Personality change plus poor inhibition: compare frontal lobe and limbic circuits.",
+      "New memory formation is impaired: inspect hippocampus and medial temporal lobe.",
+      "Unsteady gait and intention tremor: inspect cerebellum.",
+      "Contralateral visual field loss: inspect occipital cortex and optic radiations."
+    ],
+    psychologyPromptItems: [
+      "Fear conditioning: limbic system, amygdala, hippocampus, and prefrontal regulation.",
+      "Working memory: prefrontal cortex with parietal attention networks.",
+      "Language comprehension: temporal lobe networks.",
+      "Embodied attention: parietal body-space maps."
+    ]
+  },
+  ka: {
+    brandTitle: "ტვინის ატლასი",
+    brandSubtitle: "ფსიქოლოგია + მედიცინა",
+    navAtlas: "ატლასი",
+    navNeurons: "ნეირონები",
+    navStudy: "სასწავლო დაფა",
+    findStructure: "სტრუქტურის ძებნა",
+    searchPlaceholder: "შუბლის წილი, მეხსიერება, მხედველობა",
+    structures: "სტრუქტურები",
+    selected: "არჩეულია",
+    full: "სრული",
+    half: "ნახევარი",
+    inside: "შიგნით",
+    split: "გაყოფა",
+    fullTitle: "სრული ტვინის ჩვენება",
+    halfTitle: "საგიტალური ნახევარი ხედი",
+    insideTitle: "ქერქის გამჭვირვალობა და შიდა ნაწილები",
+    splitTitle: "ძირითადი სტრუქტურების დაშორება",
+    atlasEyebrow: "ინტერაქტიული ნეიროანატომია",
+    atlasTitle: "ტვინის 3D სტრუქტურის ატლასი",
+    neuronsEyebrow: "უჯრედული საფუძველი",
+    neuronsTitle: "ნეირონები და სიგნალები",
+    studyEyebrow: "სასწავლო რეჟიმი",
+    studyTitle: "სტუდენტის სასწავლო დაფა",
+    deepDive: "ღრმა განხილვა",
+    noMatch: "ამ ძებნას სტრუქტურა არ ემთხვევა.",
+    openFullPage: "სრული გვერდი",
+    neuronBasics: "ნეირონების საფუძვლები",
+    mainJob: "მთავარი როლი",
+    studentSignal: "სტუდენტის მინიშნება",
+    clinicalHook: "კლინიკური კავშირი",
+    connectsWith: "კავშირები",
+    closeNote: "შენიშვნის დახურვა",
+    fullStatus: "სრული ქერქული მოდელი",
+    halfStatus: "საგიტალური ნახევარი ხედი",
+    insideStatus: "გამოკვეთილია შიდა სისტემები",
+    splitStatus: "სტრუქტურები დაშორებულია",
+    readyStatus: "3D მოდელი მზადაა",
+    loadingStatus: "ნეიროეკრანი იტვირთება",
+    unavailableStatus: "3D ძრავა მიუწვდომელია",
+    bestAnchor: "საუკეთესო საყრდენი",
+    system: "სისტემა",
+    examLens: "საგამოცდო ფოკუსი",
+    dive: "ჩაყვინთვა",
+    surface: "ამოსვლა",
+    neuronDiveTitle: "ნეირონის შიგნით",
+    neuronDiveLead: "სიგნალები დენდრიტებზე მოდის, სომაში ჯამდება და აქსონზე მოქმედების პოტენციალად მიდის, რომელიც სინაფსში ნეიროტრანსმიტერს გამოყოფს.",
+    doubleClickHint: "ორმაგი დაწკაპუნება გასაშლელად",
+    addReview: "გასამეორებლად დამატება",
+    inReview: "გასამეორებელია",
+    reviewKicker: "დაშორებული გამეორება",
+    reviewHeading: "გაიმეორე ის, რასაც ივიწყებ",
+    reviewLead: "აქტიური გახსენება და დროში დაშორება სჯობს ხელახლა კითხვას. მონიშნე სტრუქტურები ატლასიდან და დაბრუნდი, როცა ვადა მოვა.",
+    dueNow: "ახლა ვადაა",
+    inQueue: "რიგში",
+    method: "მეთოდი",
+    spacedRepetition: "დაშორებული გამეორება",
+    reviewEmpty: "გასამეორებელი რიგი ცარიელია. გახსენი სტრუქტურა ატლასში და დააჭირე „გასამეორებლად დამატება“.",
+    reviewCaughtUp: "ყველაფერი მზადაა. ახლა ვადა არაფერს აქვს.",
+    recallPrompt: "გაიხსენე ეს სტრუქტურა",
+    recallHint: "წარმოიდგინე მისი როლი, მდებარეობა და რა ფუჭდება დაზიანებისას, შემდეგ გახსენი.",
+    remembered: "გავიხსენე",
+    forgot: "დამავიწყდა",
+    reveal: "გახსნა",
+    reviewQueue: "გასამეორებელი რიგი",
+    backAtlas: "3D ატლასზე დაბრუნება",
+    studyBoard: "სასწავლო დაფა",
+    signalPath: "სიგნალის გზა",
+    input: "შესავალი",
+    output: "გამოსავალი",
+    processing: "დამუშავება",
+    anatomy: "ანატომია",
+    physiology: "ფიზიოლოგია",
+    psychologyLens: "ფსიქოლოგიური ხედვა",
+    clinicalPattern: "კლინიკური სურათი",
+    connections: "კავშირები",
+    relatedStructures: "დაკავშირებული სტრუქტურები",
+    relatedFallback: "გამოიყენე ატლასი ახლო სისტემების შესადარებლად.",
+    neuronKicker: "ნეირონის საფუძვლები",
+    neuronHeading: "ერთეული, რომელიც ქსელებს შესაძლებელს ხდის",
+    neuronLead: "ნეირონები იღებენ სიგნალებს, აერთიანებენ მათ, წარმოქმნიან მოქმედების პოტენციალებს და სინაფსებით უკავშირდებიან ერთმანეთს. ტვინი მხოლოდ ნაწილები არ არის; ის ასევე დროისა და ქიმიის ქსელია.",
+    decisionPoint: "გადაწყვეტის წერტილი",
+    dendrites: "დენდრიტები",
+    soma: "სომა",
+    axonHillock: "აქსონის ბორცვი",
+    axon: "აქსონი",
+    synapse: "სინაფსი",
+    howSignalMoves: "როგორ მოძრაობს სიგნალი",
+    signalMoveItems: [
+      "დენდრიტები აგროვებენ აღმგზნებ და შემაკავებელ სიგნალებს.",
+      "სომა ამ სიგნალებს სივრცესა და დროში აერთიანებს.",
+      "თუ ზღვარი მიღწეულია, მოქმედების პოტენციალი აქსონზე ვრცელდება.",
+      "სინაფსები გამოყოფენ ნეიროტრანსმიტერებს, რომლებიც შემდეგ უჯრედზე მოქმედებს."
+    ],
+    neurotransmitters: "ნეიროტრანსმიტერები",
+    neurotransmittersBody: "გლუტამატი მთავარი აღმგზნები გადამცემია, GABA კი მთავარი შემაკავებელი. დოფამინი, სეროტონინი, აცეტილქოლინი, ნორეპინეფრინი და პეპტიდები არეგულირებენ განწყობას, ყურადღებას, ჯილდოს, ძილს და მოძრაობას.",
+    gliaMatter: "გლია მნიშვნელოვანია",
+    gliaBody: "ასტროციტები მხარს უჭერენ მეტაბოლიზმსა და სინაფსებს. ოლიგოდენდროციტები ქმნიან CNS მიელინს. მიკროგლია აკვირდება იმუნურ საფრთხეებს. ეპენდიმური უჯრედები პარკუჭებს ფარავს და CSF-ის დინებას ეხმარება.",
+    forPsychology: "ფსიქოლოგიისთვის",
+    psychologyBody: "ქცევა იცვლება, როცა სინაფსური წონები იცვლება. სწავლა, განმტკიცება, შიშის განპირობება, ჩვევა, ყურადღება და განწყობა ქსელურ პლასტიკურობაზეა დამოკიდებული.",
+    forMedicine: "მედიცინისთვის",
+    medicineBody: "ბევრი დარღვევა უფრო გასაგებია, როცა ცალკე ვხედავთ დაზიანების ლოკალიზაციას, გადამცემებს, გამტარობის სიჩქარეს, ანთებას და ქსელურ კომპენსაციას.",
+    bestNextStep: "შემდეგი ნაბიჯი",
+    bestNextBody: "ატლასით დააკავშირე უჯრედები სისტემებთან: ჰიპოკამპის ნეირონები მეხსიერებას აბამენ, ნათხემი შეცდომას ასწორებს, შუბლის წრეები კი ქცევას ირჩევს.",
+    openAtlas: "ატლასის გახსნა",
+    studyMode: "სასწავლო რეჟიმი",
+    studyHeading: "სტრუქტურა, ფუნქცია, დაზიანება და გზა ერთად გამოიყენე",
+    studyLead: "სტუდენტები ნეიროანატომიას უკეთ იმახსოვრებენ, როცა თითოეულ სტრუქტურას როლი, კლინიკური ნიმუში და გზა აქვს. ეს დაფა ოთხივე ნაწილს თვალწინ ტოვებს.",
+    returnModel: "3D მოდელზე დაბრუნება",
+    reviewNeurons: "ნეირონების გადახედვა",
+    miniMethod: "მინი მეთოდი",
+    locate: "იპოვე",
+    locateHint: "სად მდებარეობს სტრუქტურა?",
+    assign: "მიანიჭე",
+    assignHint: "რას გამოთვლის ან ეხმარება?",
+    predict: "ივარაუდე",
+    predictHint: "რა მოხდება დაზიანებისას?",
+    connect: "დააკავშირე",
+    connectHint: "რომელი გზა ხსნის ამას?",
+    clinicalPrompts: "კლინიკური მინიშნებები",
+    psychologyPrompts: "ფსიქოლოგიური მინიშნებები",
+    fastCompare: "სწრაფი შედარება",
+    structure: "სტრუქტურა",
+    coreFunction: "ძირითადი ფუნქცია",
+    failurePattern: "დაზიანების ნიმუში",
+    clinicalPromptItems: [
+      "პიროვნების ცვლილება და სუსტი შეკავება: შეადარე შუბლის წილი და ლიმბური წრეები.",
+      "ახალი მეხსიერების ფორმირება დარღვეულია: შეამოწმე ჰიპოკამპი და მედიალური საფეთქლის წილი.",
+      "არამყარი სიარული და განზრახვითი ტრემორი: შეამოწმე ნათხემი.",
+      "კონტრალატერალური მხედველობის ველის დაკარგვა: შეამოწმე კეფის ქერქი და მხედველობის რადიაციები."
+    ],
+    psychologyPromptItems: [
+      "შიშის განპირობება: ლიმბური სისტემა, ამიგდალა, ჰიპოკამპი და პრეფრონტალური რეგულაცია.",
+      "სამუშაო მეხსიერება: პრეფრონტალური ქერქი და თხემის ყურადღების ქსელები.",
+      "ენის გაგება: საფეთქლის წილის ქსელები.",
+      "სხეულზე დაფუძნებული ყურადღება: თხემის სხეული-სივრცის რუკები."
+    ]
+  }
+};
+
+const KA_PARTS = {
+  frontal: {
+    label: "შუბლის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "აღმასრულებელი კონტროლი, ნებაყოფლობითი მოძრაობა, მეტყველება, შეკავება და პიროვნება.",
+    quick: "გეხმარება არჩევაში, დაგეგმვაში, იმპულსის შეჩერებაში, მოძრაობასა და განზრახვის ქცევად ქცევაში.",
+    studentCue: "დაგეგმვა, განსჯა, შეკავება, პიროვნება ან მოტორული ზოლი თუ ჩანს, აქ დაიწყე.",
+    clinical: "დაზიანებამ შეიძლება შეცვალოს იმპულსის კონტროლი, განწყობა, სოციალური განსჯა, ძალა ან ექსპრესიული მეტყველება.",
+    tags: ["დაგეგმვა", "მოტორი", "პიროვნება", "მეტყველება"]
+  },
+  parietal: {
+    label: "თხემის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "შეხება, სხეულის რუკა, სივრცითი ყურადღება, სენსორული ინტეგრაცია და ანგარიში.",
+    quick: "ქმნის სხეულისა და ახლო სივრცის ცოცხალ რუკას.",
+    studentCue: "იფიქრე სომატოსენსორულ ქერქზე, neglect-ზე, მარჯვენა-მარცხენა ორიენტაციაზე და სივრცეზე.",
+    clinical: "დაზიანება იწვევს სენსორულ დაკარგვას, neglect-ს, აპრაქსიას ან სხეულის ორიენტაციის სირთულეს.",
+    tags: ["შეხება", "სივრცე", "ყურადღება", "სხეულის რუკა"]
+  },
+  temporal: {
+    label: "საფეთქლის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "სმენა, ენის გაგება, ობიექტის ამოცნობა, ემოცია და მეხსიერებაში შესვლა.",
+    quick: "ხმას მნიშვნელობად აქცევს და მეხსიერებას გამოსაყენებელ ისტორიად აყალიბებს.",
+    studentCue: "აუდიტორული ქერქი, ვერნიკეს არე, ამოცნობა, აურიანი შეტევები და მეხსიერება.",
+    clinical: "დარღვევამ შეიძლება დააზიანოს გაგება, ამოცნობა, ემოციური მნიშვნელობა ან შეტევის სიმპტომები.",
+    tags: ["სმენა", "ენა", "მეხსიერება", "ამოცნობა"]
+  },
+  occipital: {
+    label: "კეფის წილი",
+    group: "დიდი ტვინის ქერქი",
+    summary: "მხედველობა, კიდეების ამოცნობა, მოძრაობა, ფერი და ადრეული ვიზუალური ინტერპრეტაცია.",
+    quick: "იღებს ვიზუალურ სიგნალებს და იწყებს ფორმის, კონტრასტის, ფერისა და მოძრაობის ამოღებას.",
+    studentCue: "მხედველობის ველის დეფექტები, პირველადი ვიზუალური ქერქი, დორსალური და ვენტრალური ნაკადები.",
+    clinical: "დაზიანება იწვევს კონტრალატერალურ ველის დაკარგვას, ქერქულ სიბრმავეს ან ვიზუალურ აგნოზიას.",
+    tags: ["მხედველობა", "ფერი", "მოძრაობა", "ველი"]
+  },
+  cerebellum: {
+    label: "ნათხემი",
+    group: "მოტორული კოორდინაცია",
+    summary: "კოორდინაცია, დროის განსაზღვრა, ბალანსი, მოტორული სწავლა და პროგნოზი.",
+    quick: "ადარებს დაგეგმილ მოძრაობას რეალურ მოძრაობასთან და შეცდომას ასწორებს.",
+    studentCue: "ატაქსია, განზრახვითი ტრემორი, დისმეტრია, ნისტაგმი, პოზა და მოტორული სწავლა.",
+    clinical: "დაზიანება იწვევს არამყარ სიარულს, ცუდ კოორდინაციას, სკანდირებულ მეტყველებას და არაზუსტ მიწვდომას.",
+    tags: ["კოორდინაცია", "ბალანსი", "დრო", "სწავლა"]
+  },
+  brainstem: {
+    label: "ტვინის ღერო",
+    group: "გადარჩენის სისტემები",
+    summary: "სუნთქვა, სიფხიზლე, ავტონომური კონტროლი, კრანიალური ნერვები და სიგნალის რელე.",
+    quick: "ინარჩუნებს სიცოცხლის ძირითად ფუნქციებს და ატარებს სიგნალებს ტვინს, ზურგის ტვინსა და სახეს შორის.",
+    studentCue: "კრანიალური ნერვები, კომა, სუნთქვის დრაივი, რეტიკულური აქტივაცია და გრძელი გზები.",
+    clinical: "პატარა დაზიანებაც მაღალი რისკია, რადგან გზები აქ ძალიან მჭიდროდ არის შეკრული.",
+    tags: ["სუნთქვა", "სიფხიზლე", "კრანიალური ნერვები", "რელე"]
+  },
+  limbic: {
+    label: "ლიმბური სისტემა",
+    group: "ემოცია + მოტივაცია",
+    summary: "ემოცია, მნიშვნელობა, ჯილდო, საფრთხის ამოცნობა და მეხსიერების ემოციური შეფერვა.",
+    quick: "გამოცდილებას ემოციურ ღირებულებას აძლევს და წყვეტს, რა არის მნიშვნელოვანი.",
+    studentCue: "ამიგდალა, შიში, ჯილდო, მოტივაცია, ემოციური მეხსიერება და ავტონომური პასუხი.",
+    clinical: "დიზრეგულაცია კავშირშია შფოთვასთან, ტრავმასთან, დამოკიდებულებასთან და განწყობასთან.",
+    tags: ["ემოცია", "ჯილდო", "შიში", "მოტივაცია"]
+  },
+  hippocampus: {
+    label: "ჰიპოკამპი",
+    group: "მეხსიერების სისტემა",
+    summary: "დეკლარაციული მეხსიერება, კონტექსტი, სივრცითი ნავიგაცია და კონსოლიდაცია.",
+    quick: "გამოცდილებას აღდგენად მეხსიერებად აქცევს და კონტექსტს რუკავს.",
+    studentCue: "ანტეროგრადული ამნეზია, სივრცითი რუკები, მედიალური საფეთქლის წილი და კონსოლიდაცია.",
+    clinical: "ორმხრივმა დაზიანებამ ახალი დეკლარაციული მეხსიერების ფორმირება ძლიერ დააზიანოს.",
+    tags: ["მეხსიერება", "ნავიგაცია", "კონტექსტი", "სწავლა"]
+  },
+  thalamus: {
+    label: "თალამუსი",
+    group: "რელე + ყურადღება",
+    summary: "სენსორული რელე, სიფხიზლე, ყურადღების ფილტრაცია და ქერქული კოორდინაცია.",
+    quick: "ფილტრავს და ანაწილებს ინფორმაციას, სანამ ის ქერქამდე მივა.",
+    studentCue: "რელე ბირთვები, ტკივილი, შეგრძნება, სიფხიზლე, ყურადღება და ცნობიერება.",
+    clinical: "დაზიანებამ შეიძლება გამოიწვიოს სენსორული სინდრომები, ტკივილი, სიფხიზლის ან ყურადღების პრობლემები.",
+    tags: ["რელე", "ყურადღება", "შეგრძნება", "სიფხიზლე"]
+  },
+  "corpus-callosum": {
+    label: "კორპუს კალოზუმი",
+    group: "ჰემისფეროთაშორისი ხიდი",
+    summary: "მარცხენა და მარჯვენა ჰემისფეროებს შორის კომუნიკაციის ხიდი.",
+    quick: "ჰემისფეროებს სენსორული, მოტორული და კოგნიტიური ინფორმაციის გაზიარებაში ეხმარება.",
+    studentCue: "split-brain კვლევები, ჰემისფეროთაშორისი გადაცემა და კოორდინაცია.",
+    clinical: "გათიშვამ შეიძლება გამოიწვიოს split-brain ნიშნები ან ინფორმაციის გადაცემის დარღვევა.",
+    tags: ["ხიდი", "ჰემისფეროები", "გადაცემა", "split brain"]
+  },
+  prefrontal: { label: "პრეფრონტალური ქერქი", group: "აღმასრულებელი ქერქი", summary: "მიზნები, სამუშაო მეხსიერება, შეკავება, დაგეგმვა და სოციალური განსჯა.", quick: "მიზნებს აქტიურად ინახავს და ქცევას მოქმედებამდე არჩევს.", studentCue: "სამუშაო მეხსიერება, შეკავება, დაგვიანებული ჯილდო, დაგეგმვა.", clinical: "დარღვევამ შეიძლება შეცვალოს განსჯა, ყურადღება, მოტივაცია და იმპულსის კონტროლი.", tags: ["აღმასრულებელი", "დაგეგმვა", "შეკავება"] },
+  "motor-cortex": { label: "პირველადი მოტორული ქერქი", group: "მოტორული ქერქი", summary: "ნებაყოფლობითი მოძრაობის ბრძანებები, განსაკუთრებით კონტრალატერალური კონტროლი.", quick: "მოძრაობის გეგმას დაღმავალ მოტორულ გამოსვლად აქცევს.", studentCue: "პრეცენტრალური ხვეული, კორტიკოსპინალური გზა, კონტრალატერალური სისუსტე.", clinical: "დაზიანება იწვევს ზედა მოტორული ნეირონის სისუსტეს.", tags: ["მოძრაობა", "ძალა", "კორტიკოსპინალური"] },
+  "somatosensory-cortex": { label: "სომატოსენსორული ქერქი", group: "სენსორული ქერქი", summary: "შეხების, წნევის, ტკივილისა და სხეულის პოზიციის ქერქული რუკა.", quick: "სხეულის შეგრძნებებს ორგანიზებულ რუკად აქცევს.", studentCue: "პოსტცენტრალური ხვეული, ჰომუნკულუსი, კონტრალატერალური შეგრძნება.", clinical: "დაზიანება იწვევს შეგრძნების დაკარგვას ან ლოკალიზაციის სირთულეს.", tags: ["შეხება", "ტკივილი", "სხეული"] },
+  broca: { label: "ბროკას არე", group: "ენის წარმოება", summary: "მეტყველების დაგეგმვა და ექსპრესიული ენის წარმოება.", quick: "აზრს სალაპარაკო მოტორულ გეგმად აწყობს.", studentCue: "არაფლუენტური აფაზია, დაზიანებული გამეორება, შენარჩუნებული გაგება.", clinical: "დაზიანება იწვევს ბროკას აფაზიას.", tags: ["მეტყველება", "ენა", "აფაზია"] },
+  wernicke: { label: "ვერნიკეს არე", group: "ენის გაგება", summary: "სიტყვის მნიშვნელობის და სალაპარაკო ენის გაგების ქსელი.", quick: "ხმოვან ენას მნიშვნელობას ანიჭებს.", studentCue: "ფლუენტური აფაზია, ცუდი გაგება, უაზრო სიტყვები.", clinical: "დაზიანება იწვევს ვერნიკეს აფაზიას.", tags: ["გაგება", "ენა", "მნიშვნელობა"] },
+  amygdala: { label: "ამიგდალა", group: "საფრთხე + ემოცია", summary: "ემოციური მნიშვნელობა, საფრთხე, შიში და მეხსიერების ემოციური ტონი.", quick: "წყვეტს, რამდენად ემოციურად მნიშვნელოვანი ან საფრთხის შემცველია სტიმული.", studentCue: "შიში, ემოციური მეხსიერება, საფრთხე, ავტონომური რეაქცია.", clinical: "დარღვევები კავშირშია შფოთვასთან, ტრავმასთან და ემოციურ რეგულაციასთან.", tags: ["შიში", "საფრთხე", "ემოცია"] },
+  "basal-ganglia": { label: "ბაზალური განგლიები", group: "მოქმედების არჩევა", summary: "ჩვევები, მოქმედების არჩევა, მოძრაობის დაწყება და ჯილდოზე სწავლა.", quick: "ეხმარება ტვინს აირჩიოს რომელი მოქმედება დაიწყოს ან შეაჩეროს.", studentCue: "პარკინსონი, ჰანტინგტონი, go/no-go გზები, ჩვევები.", clinical: "დაზიანება ცვლის მოძრაობის სისწრაფეს, ჩვევებს და მოტივაციას.", tags: ["ჩვევა", "მოძრაობა", "დოფამინი"] },
+  hypothalamus: { label: "ჰიპოთალამუსი", group: "ჰომეოსტაზი", summary: "ტემპერატურა, შიმშილი, წყურვილი, ჰორმონები, ავტონომური კონტროლი და ძილი.", quick: "სხეულის საჭიროებებს ჰორმონულ და ავტონომურ პასუხად აქცევს.", studentCue: "ჰიპოფიზი, შიმშილი, წყურვილი, ტემპერატურა, ცირკადული რიტმი.", clinical: "დაზიანება არღვევს ენდოკრინულ ფუნქციას, ძილს, მადას ან ტემპერატურას.", tags: ["ჰორმონები", "ძილი", "შიმშილი"] },
+  pineal: { label: "ფიჭვისებრი ჯირკვალი", group: "ენდოკრინული + ძილი", summary: "მცირე შუახაზის ჯირკვალი, რომელიც მელატონინს გამოყოფს და ცირკადულ რიტმს ეხმარება.", quick: "სინათლესა და სიბნელეს სხეულის დღე-ღამის სიგნალად თარგმნის.", studentCue: "მელატონინი, ცირკადული რიტმი, ეპითალამუსი, კალციფიკაცია.", clinical: "სიმსივნემ შეიძლება გამოიწვიოს პაროინოს სინდრომი.", tags: ["მელატონინი", "ცირკადული", "ძილი"] },
+  insula: { label: "ინსულა", group: "ინტეროცეფცია", summary: "აერთიანებს სხეულის მდგომარეობას, გემოს, ტკივილს, ემოციას და თვითგრძნობას.", quick: "შიდა სხეულის სიგნალებს ცნობიერ გრძნობად აქცევს.", studentCue: "ინტეროცეფცია, ზიზღი, ტკივილი, გემო, craving.", clinical: "დარღვევამ შეიძლება შეცვალოს სხეულის, ტკივილის, ემოციის ან craving-ის აღქმა.", tags: ["ინტეროცეფცია", "ტკივილი", "გემო"] },
+  "cingulate-cortex": { label: "ცინგულარული ქერქი", group: "მედიალური ქერქი", summary: "აკონტროლებს კონფლიქტს, ტკივილს, ძალისხმევას, ყურადღებას და ემოციურ მოქმედებას.", quick: "წყვეტს, რას სჭირდება ძალისხმევა და ყურადღება.", studentCue: "კონფლიქტი, ტკივილის აფექტი, მოტივაცია, შეცდომის აღმოჩენა.", clinical: "დაზიანება ცვლის მოტივაციას, ყურადღებას და ემოციურ რეგულაციას.", tags: ["ძალისხმევა", "ყურადღება", "ტკივილი"] },
+  "visual-cortex": { label: "პირველადი ვიზუალური ქერქი", group: "ვიზუალური ქერქი", summary: "იღებს რუკირებულ სიგნალებს თალამუსიდან და ამოიღებს ადრეულ ვიზუალურ ნიშნებს.", quick: "ქმნის ვიზუალური სივრცის პირველ ქერქულ რუკას.", studentCue: "V1, კალკარინის ღარი, რეტინოტოპია, ველის დაკარგვა.", clinical: "დაზიანება იწვევს პროგნოზირებად კონტრალატერალურ დეფექტებს.", tags: ["V1", "მხედველობა", "რეტინოტოპია"] },
+  "auditory-cortex": { label: "აუდიტორული ქერქი", group: "სმენის ქერქი", summary: "ამუშავებს ხმის სიხშირეს, დროს, მეტყველების ხმებს და სმენით სცენას.", quick: "ვიბრაციის ნიმუშებს ორგანიზებულ ხმად აქცევს.", studentCue: "ზედა საფეთქლის ხვეული, ტონოტოპია, სმენა და ენა.", clinical: "დაზიანება არღვევს ხმის ამოცნობას და სმენით ენას.", tags: ["სმენა", "ტონოტოპია", "მეტყველება"] },
+  "angular-gyrus": { label: "კუთხის ხვეული", group: "ასოციაციური ქერქი", summary: "აერთიანებს ენას, რიცხვს, კითხვას, სივრცით ყურადღებას და სემანტიკას.", quick: "სიმბოლოებს, მნიშვნელობას და სივრცით იდეებს აერთიანებს.", studentCue: "გერსტმანის ნიშნები, კითხვა, წერა, ანგარიში.", clinical: "დომინანტური დაზიანება არღვევს ანგარიშს, წერას და მარჯვენა-მარცხენა ორიენტაციას.", tags: ["კითხვა", "მათემატიკა", "სემანტიკა"] },
+  "fusiform-gyrus": { label: "ფუზიფორმული ხვეული", group: "ვენტრალური ვიზუალური ნაკადი", summary: "მაღალი დონის ვიზუალური ამოცნობა, განსაკუთრებით სახეები და გამოცდილ კატეგორიები.", quick: "სახეების და მნიშვნელოვანი ვიზუალური ნიმუშების ამოცნობას ეხმარება.", studentCue: "სახის ამოცნობა, ვენტრალური ნაკადი, პროზოპაგნოზია.", clinical: "მარჯვენა ფუზიფორმის დაზიანება პროზოპაგნოზიასთანაა დაკავშირებული.", tags: ["სახეები", "ამოცნობა", "ვენტრალური"] },
+  "nucleus-accumbens": { label: "ბირთვი აკუმბენსი", group: "ჯილდოს წრე", summary: "აკავშირებს დოფამინს, მოტივაციას, განმტკიცებით სწავლას და ჯილდოზე ქცევას.", quick: "ნიშნავს ჯილდოს და მოქმედების გამეორებას ამოტივირებს.", studentCue: "ჯილდო, დამოკიდებულება, მოტივაცია, ვენტრალური სტრიატუმი.", clinical: "წრეების ცვლილება მნიშვნელოვანია დამოკიდებულებაში, დეპრესიასა და აპათიაში.", tags: ["ჯილდო", "მოტივაცია", "დოფამინი"] },
+  "substantia-nigra": { label: "შავი ნივთიერება", group: "შუატვინის დოფამინი", summary: "აწვდის დოფამინს მოძრაობის ძალისთვის, ჩვევებისა და ჯილდოს პროგნოზისთვის.", quick: "დოფამინით მოძრაობის დაწყებას და მასშტაბირებას ეხმარება.", studentCue: "პარკინსონი, დოფამინი, შუატვინი, ბრადიკინეზია.", clinical: "დეგენერაცია პარკინსონის მოტორული ნიშნების ცენტრია.", tags: ["დოფამინი", "მოძრაობა", "პარკინსონი"] },
+  pons: { label: "ხიდი", group: "ტვინის ღერო", summary: "ქერქის სიგნალებს ნათხემს გადასცემს და ეხმარება ძილს, სუნთქვასა და კრანიალურ ნერვებს.", quick: "ხიდია ქერქს, ნათხემს, სახესა და სიფხიზლეს შორის.", studentCue: "ტვინის ღეროს ხიდი, კრანიალური ნერვები, ძილი, სუნთქვა.", clinical: "დაზიანება ცვლის თვალის მოძრაობას, სახის ფუნქციას, სიფხიზლეს და გრძელ გზებს.", tags: ["რელე", "ძილი", "კრანიალური ნერვები"] },
+  medulla: { label: "მოგრძო ტვინი", group: "ტვინის ღერო", summary: "მართავს სუნთქვას, გულისცემას, ყლაპვას და ღებინების რეფლექსებს.", quick: "სასიცოცხლო რეფლექსებს მუდმივად ამუშავებს.", studentCue: "სუნთქვა, გულ-სისხლძარღვთა კონტროლი, ყლაპვა, პირამიდული გადაკვეთა.", clinical: "დაზიანება საფრთხეს უქმნის სუნთქვას, ცირკულაციას და ყლაპვას.", tags: ["სუნთქვა", "გულისცემა", "რეფლექსები"] },
+  "cerebellar-vermis": { label: "ნათხემის ჭია", group: "ნათხემის შუახაზი", summary: "აკოორდინირებს პოზას, ტანს, სიარულის სტაბილობას და თვალ-თავის ბალანსს.", quick: "მოძრაობისას სხეულის შუახაზს ასტაბილურებს.", studentCue: "სიარულის ატაქსია, ტანის არასტაბილურობა, პოზა.", clinical: "დაზიანება კლასიკურად იწვევს სიარულის და ტანის ატაქსიას.", tags: ["სიარული", "პოზა", "ბალანსი"] }
+};
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -605,32 +1030,61 @@ function interestingFact(part) {
   return INTERESTING_FACTS[part.id] || "Its role is easiest to remember by pairing location, pathway, function, and lesion pattern.";
 }
 
-function renderPartsList() {
-  const query = els.partSearch.value.trim().toLowerCase();
-  const filtered = PARTS.filter((part) => {
-    const haystack = [
-      part.label,
-      part.group,
-      part.summary,
-      part.quick,
-      part.tags.join(" "),
-      part.connections.join(" ")
-    ].join(" ").toLowerCase();
-    return !query || haystack.includes(query);
+function tr(key) {
+  return UI_TEXT[state.lang]?.[key] ?? UI_TEXT.en[key] ?? key;
+}
+
+function currentPart(part) {
+  if (state.lang !== "ka") return part;
+  const translated = KA_PARTS[part.id];
+  if (!translated) return part;
+  return {
+    ...part,
+    ...translated,
+    connections: translated.connections || part.connections,
+    tags: translated.tags || part.tags,
+    deep: {
+      ...part.deep,
+      ...(translated.deep || {})
+    }
+  };
+}
+
+function currentInterestingFact(part) {
+  if (state.lang === "ka") {
+    return "დასამახსოვრებლად დააკავშირე მდებარეობა, გზა, ფუნქცია და დაზიანების ნიმუში.";
+  }
+  return interestingFact(part);
+}
+
+function renderStaticText() {
+  document.documentElement.lang = state.lang === "ka" ? "ka" : "en";
+  els.brandTitle.textContent = tr("brandTitle");
+  els.brandSubtitle.textContent = tr("brandSubtitle");
+  els.navLinks.forEach((link) => {
+    const labels = {
+      atlas: tr("navAtlas"),
+      neurons: tr("navNeurons"),
+      study: tr("navStudy")
+    };
+    link.querySelector("span").textContent = labels[link.dataset.route] || link.dataset.route;
+  });
+  if (els.selectedLabel) els.selectedLabel.textContent = tr("selected");
+  els.langButtons.forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.lang === state.lang);
   });
 
-  els.partCount.textContent = String(filtered.length);
-  els.partsList.innerHTML = filtered.length
-    ? filtered.map((part) => `
-        <button class="part-button ${part.id === state.selectedPartId ? "is-active" : ""}" type="button" data-part="${part.id}" style="${partStyle(part)}">
-          <span class="part-swatch" aria-hidden="true">${iconMarkup(partIcon(part), "part-icon")}</span>
-          <span>
-            <strong>${escapeHtml(part.label)}</strong>
-            <span>${escapeHtml(part.group)} · ${escapeHtml(part.quick)}</span>
-          </span>
-        </button>
-      `).join("")
-    : `<div class="empty-state">No structure matches that search.</div>`;
+  const viewCopy = {
+    full: ["full", "fullTitle"],
+    half: ["half", "halfTitle"],
+    inside: ["inside", "insideTitle"],
+    split: ["split", "splitTitle"]
+  };
+  els.viewButtons.forEach((button) => {
+    const [labelKey, titleKey] = viewCopy[button.dataset.view];
+    button.textContent = tr(labelKey);
+    button.title = tr(titleKey);
+  });
 }
 
 function renderBrainHotspots() {
@@ -639,9 +1093,10 @@ function renderBrainHotspots() {
     .map(({ id, x, y }) => {
       const part = PART_MAP.get(id);
       if (!part) return "";
+      const display = currentPart(part);
       return `
-        <button class="brain-hotspot ${part.id === state.selectedPartId ? "is-active" : ""}" type="button" data-part="${part.id}" aria-label="${escapeHtml(part.label)}" style="--x:${x}%; --y:${y}%; --hotspot-color:${part.color}">
-          <span class="sr-only">${escapeHtml(part.label)}</span>
+        <button class="brain-hotspot ${part.id === state.selectedPartId ? "is-active" : ""}" type="button" data-part="${part.id}" aria-label="${escapeHtml(display.label)}" style="--x:${x}%; --y:${y}%; --hotspot-color:${part.color}">
+          <span class="sr-only">${escapeHtml(display.label)}</span>
         </button>
       `;
     })
@@ -660,10 +1115,8 @@ function setSelectedPart(partId, options = {}) {
   state.selectedPartId = part.id;
   state.calloutVisible = Boolean(options.showCallout);
   state.calloutAnchor = options.anchor || null;
-  renderPartsList();
   renderInfoDock(part);
   updateLegend(part);
-  updateHotspotState();
   updateMeshTargets();
   if (!state.calloutVisible) {
     hideCallout();
@@ -685,7 +1138,7 @@ function hideCallout() {
 }
 
 function updateLegend(part) {
-  els.legendTitle.textContent = part.label;
+  els.legendTitle.textContent = currentPart(part).label;
   els.legendAccent.style.background = part.color;
   els.legendAccent.style.boxShadow = `0 0 18px ${part.color}`;
 }
@@ -710,17 +1163,18 @@ function renderFactCard({ title, icon, body, detail, list }) {
 
 function updateAnnotationContent(part) {
   if (!els.brainCallout) return;
+  const display = currentPart(part);
   els.brainCallout.style.setProperty("--part-color", part.color);
   els.brainCallout.innerHTML = `
     <div class="callout-head">
       ${iconMarkup(partIcon(part), "callout-icon")}
       <div>
-        <small>${escapeHtml(part.group)}</small>
-        <strong>${escapeHtml(part.label)}</strong>
+        <small>${escapeHtml(display.group)}</small>
+        <strong>${escapeHtml(display.label)}</strong>
       </div>
     </div>
-    <p>${escapeHtml(part.quick)}</p>
-    <button class="callout-close" type="button" aria-label="Close structure note">x</button>
+    <p>${escapeHtml(display.quick)}</p>
+    <button class="callout-close" type="button" aria-label="${escapeHtml(tr("closeNote"))}">x</button>
   `;
 }
 
@@ -761,53 +1215,101 @@ function positionAnnotation() {
   els.brainCallout.classList.add("is-visible");
 }
 
+// --- Spaced-repetition review queue (localStorage, Leitner-style) ---
+const REVIEW_KEY = "brainAtlasReview";
+const REVIEW_INTERVALS = [1, 3, 7, 16, 35]; // days per box
+const reviewSession = { id: null, revealed: false };
+
+function loadReview() {
+  try {
+    return JSON.parse(localStorage.getItem(REVIEW_KEY)) || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function saveReview() {
+  try {
+    localStorage.setItem(REVIEW_KEY, JSON.stringify(reviewData));
+  } catch (error) {
+    /* storage unavailable — keep in memory only */
+  }
+}
+
+let reviewData = loadReview();
+
+function isQueued(partId) {
+  return Boolean(reviewData[partId]);
+}
+
+function toggleReview(partId) {
+  if (reviewData[partId]) {
+    delete reviewData[partId];
+  } else {
+    reviewData[partId] = { box: 0, due: Date.now() };
+  }
+  saveReview();
+  updateReviewBadge();
+}
+
+function reviewDueList() {
+  const now = Date.now();
+  return Object.keys(reviewData)
+    .filter((id) => PART_MAP.has(id) && reviewData[id].due <= now)
+    .sort((a, b) => reviewData[a].due - reviewData[b].due);
+}
+
+function reviewGrade(partId, remembered) {
+  const item = reviewData[partId];
+  if (!item) return;
+  item.box = remembered ? Math.min(REVIEW_INTERVALS.length - 1, item.box + 1) : 0;
+  item.due = Date.now() + REVIEW_INTERVALS[item.box] * 86400000;
+  saveReview();
+  updateReviewBadge();
+}
+
+function updateReviewBadge() {
+  if (!els.reviewBadge) return;
+  const due = reviewDueList().length;
+  els.reviewBadge.textContent = String(due);
+  els.reviewBadge.hidden = due === 0;
+}
+
 function renderInfoDock(part) {
+  const display = currentPart(part);
   els.infoDock.style.setProperty("--part-color", part.color);
+  const queued = isQueued(part.id);
+  const pathway = display.deep.pathway || [];
   els.infoDock.innerHTML = `
-    <article class="info-main console-profile" style="${partStyle(part)}">
-      <div class="info-heading">
-        <span class="info-icon" aria-hidden="true">${iconMarkup(partIcon(part), "info-icon-glyph")}</span>
-        <div>
-          <p class="eyebrow">${escapeHtml(part.group)}</p>
-          <h2>${escapeHtml(part.label)}</h2>
+    <article class="region-card ${state.infoExpanded ? "is-expanded" : ""}" data-part="${part.id}" aria-expanded="${state.infoExpanded}" title="${escapeHtml(tr("doubleClickHint"))}">
+      <div class="region-card__head">
+        <span class="region-card__dot" aria-hidden="true"></span>
+        <div class="region-card__titles">
+          <small>${escapeHtml(display.group)}</small>
+          <strong>${escapeHtml(display.label)}</strong>
+        </div>
+        <span class="region-card__hint">${escapeHtml(tr("doubleClickHint"))} ${iconMarkup("mdi:chevron-down")}</span>
+      </div>
+      <p class="region-card__short">${escapeHtml(display.quick)}</p>
+      <div class="region-card__actions">
+        <button type="button" class="region-chip ${queued ? "is-queued" : ""}" data-action="review">
+          ${iconMarkup(queued ? "mdi:check-bold" : "mdi:cards-outline")}
+          <span>${escapeHtml(queued ? tr("inReview") : tr("addReview"))}</span>
+        </button>
+        <a class="region-chip" href="#part/${part.id}">${iconMarkup("mdi:book-open-page-variant")} <span>${escapeHtml(tr("openFullPage"))}</span></a>
+      </div>
+      <div class="region-card__long">
+        <div class="region-card__long-inner">
+          <div class="region-long-grid">
+            <div class="region-long-block"><h4>${iconMarkup("mdi:map-marker")} ${escapeHtml(tr("anatomy"))}</h4><p>${escapeHtml(display.deep.anatomy)}</p></div>
+            <div class="region-long-block"><h4>${iconMarkup("mdi:flash")} ${escapeHtml(tr("physiology"))}</h4><p>${escapeHtml(display.deep.physiology)}</p></div>
+            <div class="region-long-block"><h4>${iconMarkup("mdi:brain")} ${escapeHtml(tr("psychologyLens"))}</h4><p>${escapeHtml(display.deep.psychology)}</p></div>
+            <div class="region-long-block"><h4>${iconMarkup("mdi:stethoscope")} ${escapeHtml(tr("clinicalPattern"))}</h4><p>${escapeHtml(display.deep.medical)}</p></div>
+            ${pathway.length ? `<div class="region-pathway">${pathway.map((step, i) => `<span>${i > 0 ? "&rarr;&nbsp;" : ""}<b>${escapeHtml(step)}</b></span>`).join("")}</div>` : ""}
+          </div>
         </div>
       </div>
-      <p>${escapeHtml(part.summary)}</p>
-      <div class="tag-row">
-        ${part.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
-      </div>
-      <div class="dock-actions">
-        <a class="primary-link" href="#part/${part.id}">${iconMarkup("mdi:book-open-page-variant", "action-icon")} Open full page</a>
-        <a class="ghost-link" href="#neurons">${iconMarkup("mdi:transit-connection-variant", "action-icon")} Neuron basics</a>
-      </div>
     </article>
-
-    <div class="info-grid console-modules" style="${partStyle(part)}">
-      ${renderFactCard({
-        title: "Main job",
-        icon: FACT_ICONS.job,
-        body: part.quick,
-        detail: part.deep.physiology
-      })}
-      ${renderFactCard({
-        title: "Student signal",
-        icon: FACT_ICONS.signal,
-        body: part.studentCue,
-        detail: part.deep.anatomy
-      })}
-      ${renderFactCard({
-        title: "Clinical hook",
-        icon: FACT_ICONS.clinical,
-        body: part.clinical,
-        detail: part.deep.medical
-      })}
-      ${renderFactCard({
-        title: "Connects with",
-        icon: FACT_ICONS.connections,
-        list: part.connections,
-        detail: interestingFact(part)
-      })}
-    </div>
   `;
   updateAnnotationContent(part);
 }
@@ -817,14 +1319,29 @@ function renderRoute() {
   state.route = route;
   updateNavigation(route);
 
+  // The neuron dive lives inside the atlas canvas, so it keeps the atlas screen.
+  if (route !== "neurons") endDive();
+
   if (route === "atlas") {
     els.atlasScreen.hidden = false;
     els.articleScreen.hidden = true;
     els.topbarActions.hidden = false;
-    els.eyebrow.textContent = "Interactive neuroanatomy";
-    els.pageTitle.textContent = "3D Brain Structure Atlas";
+    els.eyebrow.textContent = tr("atlasEyebrow");
+    els.pageTitle.textContent = tr("atlasTitle");
     resizeRenderer();
     applyAos();
+    return;
+  }
+
+  if (route === "neurons" && state.threeReady) {
+    els.atlasScreen.hidden = false;
+    els.articleScreen.hidden = true;
+    els.topbarActions.hidden = false;
+    els.eyebrow.textContent = tr("neuronsEyebrow");
+    els.pageTitle.textContent = tr("neuronsTitle");
+    renderNeuronCaption();
+    startDive();
+    resizeRenderer();
     return;
   }
 
@@ -835,16 +1352,16 @@ function renderRoute() {
   hideCallout();
 
   if (route === "neurons") {
-    els.eyebrow.textContent = "Cellular foundation";
-      els.pageTitle.textContent = "Neurons And Signaling";
-      renderNeuronsPage();
-      applyAos(els.articleScreen);
-      return;
-    }
+    els.eyebrow.textContent = tr("neuronsEyebrow");
+    els.pageTitle.textContent = tr("neuronsTitle");
+    renderNeuronsPage();
+    applyAos(els.articleScreen);
+    return;
+  }
 
   if (route === "study") {
-    els.eyebrow.textContent = "Teaching mode";
-    els.pageTitle.textContent = "Student Study Board";
+    els.eyebrow.textContent = tr("studyEyebrow");
+    els.pageTitle.textContent = tr("studyTitle");
     renderStudyPage();
     applyAos(els.articleScreen);
     return;
@@ -855,8 +1372,9 @@ function renderRoute() {
     const part = PART_MAP.get(partId);
     if (part) {
       setSelectedPart(part.id);
-      els.eyebrow.textContent = part.group;
-      els.pageTitle.textContent = `${part.label} Deep Dive`;
+      const display = currentPart(part);
+      els.eyebrow.textContent = display.group;
+      els.pageTitle.textContent = `${display.label} ${tr("deepDive")}`;
       renderPartArticle(part);
       applyAos(els.articleScreen);
       return;
@@ -901,6 +1419,7 @@ function applyAos(root = document) {
 }
 
 function renderPartArticle(part) {
+  const display = currentPart(part);
   const related = PARTS
     .filter((candidate) => candidate.id !== part.id)
     .filter((candidate) => candidate.connections.some((connection) => part.connections.includes(connection)) || candidate.group === part.group)
@@ -910,41 +1429,41 @@ function renderPartArticle(part) {
     <div class="article-layout" style="${partStyle(part)}">
       <section class="article-hero">
         <article class="article-panel">
-          <p class="article-kicker">${escapeHtml(part.group)}</p>
-          <h2>${escapeHtml(part.label)}</h2>
-          <p class="lede">${escapeHtml(part.summary)}</p>
+          <p class="article-kicker">${escapeHtml(display.group)}</p>
+          <h2>${escapeHtml(display.label)}</h2>
+          <p class="lede">${escapeHtml(display.summary)}</p>
           <div class="tag-row">
-            ${part.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
+            ${display.tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join("")}
           </div>
           <div class="metric-strip">
             <div class="metric">
-              <small>Best anchor</small>
-              <strong>${escapeHtml(part.tags[0])}</strong>
+              <small>${escapeHtml(tr("bestAnchor"))}</small>
+              <strong>${escapeHtml(display.tags[0])}</strong>
             </div>
             <div class="metric">
-              <small>System</small>
-              <strong>${escapeHtml(part.group)}</strong>
+              <small>${escapeHtml(tr("system"))}</small>
+              <strong>${escapeHtml(display.group)}</strong>
             </div>
             <div class="metric">
-              <small>Exam lens</small>
-              <strong>${escapeHtml(part.studentCue.split(",")[0])}</strong>
+              <small>${escapeHtml(tr("examLens"))}</small>
+              <strong>${escapeHtml(display.studentCue.split(",")[0])}</strong>
             </div>
           </div>
           <div class="dock-actions">
-            <a class="primary-link" href="#atlas">Back to 3D atlas</a>
-            <a class="ghost-link" href="#study">Study board</a>
+            <a class="primary-link" href="#atlas">${escapeHtml(tr("backAtlas"))}</a>
+            <a class="ghost-link" href="#study">${escapeHtml(tr("studyBoard"))}</a>
           </div>
         </article>
 
         <aside class="article-panel">
-          <h2>Signal Path</h2>
+          <h2>${escapeHtml(tr("signalPath"))}</h2>
           <div class="pathway-map">
-            ${part.deep.pathway.map((step, index) => `
+            ${display.deep.pathway.map((step, index) => `
               <div class="path-step">
                 <span>${index + 1}</span>
                 <div>
                   <strong>${escapeHtml(step)}</strong>
-                  <small>${index === 0 ? "Input" : index === part.deep.pathway.length - 1 ? "Output" : "Processing"}</small>
+                  <small>${index === 0 ? tr("input") : index === display.deep.pathway.length - 1 ? tr("output") : tr("processing")}</small>
                 </div>
               </div>
             `).join("")}
@@ -954,34 +1473,34 @@ function renderPartArticle(part) {
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>Anatomy</h3>
-          <p>${escapeHtml(part.deep.anatomy)}</p>
+          <h3>${escapeHtml(tr("anatomy"))}</h3>
+          <p>${escapeHtml(display.deep.anatomy)}</p>
         </article>
         <article class="note-block">
-          <h3>Physiology</h3>
-          <p>${escapeHtml(part.deep.physiology)}</p>
+          <h3>${escapeHtml(tr("physiology"))}</h3>
+          <p>${escapeHtml(display.deep.physiology)}</p>
         </article>
         <article class="note-block">
-          <h3>Psychology Lens</h3>
-          <p>${escapeHtml(part.deep.psychology)}</p>
+          <h3>${escapeHtml(tr("psychologyLens"))}</h3>
+          <p>${escapeHtml(display.deep.psychology)}</p>
         </article>
       </section>
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>Clinical Pattern</h3>
-          <p>${escapeHtml(part.deep.medical)}</p>
+          <h3>${escapeHtml(tr("clinicalPattern"))}</h3>
+          <p>${escapeHtml(display.deep.medical)}</p>
         </article>
         <article class="note-block">
-          <h3>Connections</h3>
+          <h3>${escapeHtml(tr("connections"))}</h3>
           <ul>
-            ${part.connections.map((connection) => `<li>${escapeHtml(connection)}</li>`).join("")}
+            ${display.connections.map((connection) => `<li>${escapeHtml(connection)}</li>`).join("")}
           </ul>
         </article>
         <article class="note-block">
-          <h3>Related Structures</h3>
+          <h3>${escapeHtml(tr("relatedStructures"))}</h3>
           <ul>
-            ${related.map((item) => `<li><a href="#part/${item.id}">${escapeHtml(item.label)}</a></li>`).join("") || "<li>Use the atlas to compare nearby systems.</li>"}
+            ${related.map((item) => `<li><a href="#part/${item.id}">${escapeHtml(currentPart(item).label)}</a></li>`).join("") || `<li>${escapeHtml(tr("relatedFallback"))}</li>`}
           </ul>
         </article>
       </section>
@@ -994,69 +1513,66 @@ function renderNeuronsPage() {
     <div class="article-layout">
       <section class="article-hero">
         <article class="article-panel">
-          <p class="article-kicker">${iconMarkup("mdi:dna", "article-kicker-icon")} Neuron basics</p>
-          <h2>The unit that makes networks possible</h2>
-          <p class="lede">Neurons receive signals, integrate them, fire action potentials, and communicate across synapses. The brain is not only its parts; it is also the timing and chemistry between cells.</p>
+          <p class="article-kicker">${iconMarkup("mdi:dna", "article-kicker-icon")} ${escapeHtml(tr("neuronKicker"))}</p>
+          <h2>${escapeHtml(tr("neuronHeading"))}</h2>
+          <p class="lede">${escapeHtml(tr("neuronLead"))}</p>
           <div class="metric-strip">
             <div class="metric">
-              <small>Input</small>
-              <strong>Dendrites</strong>
+              <small>${escapeHtml(tr("input"))}</small>
+              <strong>${escapeHtml(tr("dendrites"))}</strong>
             </div>
             <div class="metric">
-              <small>Decision point</small>
-              <strong>Axon hillock</strong>
+              <small>${escapeHtml(tr("decisionPoint"))}</small>
+              <strong>${escapeHtml(tr("axonHillock"))}</strong>
             </div>
             <div class="metric">
-              <small>Output</small>
-              <strong>Synapse</strong>
+              <small>${escapeHtml(tr("output"))}</small>
+              <strong>${escapeHtml(tr("synapse"))}</strong>
             </div>
           </div>
         </article>
         <figure class="neuron-figure" data-aos="fade-left" aria-label="Realistic neuron render">
           <img src="./assets/neuron-render.png" alt="Realistic 3D neuron with dendrites, soma, axon, myelin segments, and synaptic terminals">
           <figcaption>
-            <span>dendrites</span>
-            <span>soma</span>
-            <span>axon</span>
-            <span>synapse</span>
+            <span>${escapeHtml(tr("dendrites"))}</span>
+            <span>${escapeHtml(tr("soma"))}</span>
+            <span>${escapeHtml(tr("axon"))}</span>
+            <span>${escapeHtml(tr("synapse"))}</span>
           </figcaption>
         </figure>
       </section>
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>${iconMarkup("mdi:lightning-bolt-circle", "card-icon")} How a signal moves</h3>
+          <h3>${iconMarkup("mdi:lightning-bolt-circle", "card-icon")} ${escapeHtml(tr("howSignalMoves"))}</h3>
           <ul>
-            <li>Dendrites collect excitatory and inhibitory inputs.</li>
-            <li>The soma integrates those inputs over space and time.</li>
-            <li>If threshold is reached, an action potential travels down the axon.</li>
-            <li>Synapses release neurotransmitters that affect the next cell.</li>
+            ${tr("signalMoveItems").map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
           </ul>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:test-tube", "card-icon")} Neurotransmitters</h3>
-          <p>Glutamate is the major excitatory transmitter. GABA is the major inhibitory transmitter. Dopamine, serotonin, acetylcholine, norepinephrine, and many peptides tune mood, attention, reward, sleep, and movement.</p>
+          <h3>${iconMarkup("mdi:test-tube", "card-icon")} ${escapeHtml(tr("neurotransmitters"))}</h3>
+          <p>${escapeHtml(tr("neurotransmittersBody"))}</p>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:shield-check", "card-icon")} Glia matter</h3>
-          <p>Astrocytes support metabolism and synapses. Oligodendrocytes make CNS myelin. Microglia survey immune threats. Ependymal cells line ventricles and help with CSF flow.</p>
+          <h3>${iconMarkup("mdi:shield-check", "card-icon")} ${escapeHtml(tr("gliaMatter"))}</h3>
+          <p>${escapeHtml(tr("gliaBody"))}</p>
         </article>
       </section>
 
       <section class="article-grid">
         <article class="note-block">
-          <h3>${iconMarkup("mdi:account-group", "card-icon")} For psychology</h3>
-          <p>Behavior changes when synaptic weights change. Learning, reinforcement, fear conditioning, habit, attention, and mood all depend on circuit-level plasticity.</p>
+          <h3>${iconMarkup("mdi:account-group", "card-icon")} ${escapeHtml(tr("forPsychology"))}</h3>
+          <p>${escapeHtml(tr("psychologyBody"))}</p>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:stethoscope", "card-icon")} For medicine</h3>
-          <p>Many disorders are easier to reason through when you separate lesion localization, neurotransmitter effects, conduction speed, inflammation, and network compensation.</p>
+          <h3>${iconMarkup("mdi:stethoscope", "card-icon")} ${escapeHtml(tr("forMedicine"))}</h3>
+          <p>${escapeHtml(tr("medicineBody"))}</p>
         </article>
         <article class="note-block">
-          <h3>${iconMarkup("mdi:map-marker", "card-icon")} Best next step</h3>
-          <p>Use the atlas to connect cells to systems: hippocampal neurons bind memory, cerebellar circuits tune error, and frontal loops select behavior.</p>
+          <h3>${iconMarkup("mdi:map-marker", "card-icon")} ${escapeHtml(tr("bestNextStep"))}</h3>
+          <p>${escapeHtml(tr("bestNextBody"))}</p>
           <div class="dock-actions">
-            <a class="primary-link" href="#atlas">Open atlas</a>
+            <a class="primary-link" href="#atlas">${escapeHtml(tr("openAtlas"))}</a>
           </div>
         </article>
       </section>
@@ -1065,86 +1581,89 @@ function renderNeuronsPage() {
 }
 
 function renderStudyPage() {
+  const dueIds = reviewDueList();
+  const queuedIds = Object.keys(reviewData).filter((id) => PART_MAP.has(id));
   els.articleScreen.innerHTML = `
     <div class="article-layout">
       <section class="article-hero">
         <article class="article-panel">
-          <p class="article-kicker">${iconMarkup("mdi:notebook", "article-kicker-icon")} Study mode</p>
-          <h2>Use structure, function, lesion, and pathway together</h2>
-          <p class="lede">Students remember neuroanatomy better when every structure has a role, a clinical pattern, and a pathway. This board keeps those four pieces visible.</p>
-          <div class="dock-actions">
-            <a class="primary-link" href="#atlas">Return to 3D model</a>
-            <a class="ghost-link" href="#neurons">Review neurons</a>
+          <p class="article-kicker">${iconMarkup("mdi:cards-outline", "article-kicker-icon")} ${escapeHtml(tr("reviewKicker"))}</p>
+          <h2>${escapeHtml(tr("reviewHeading"))}</h2>
+          <p class="lede">${escapeHtml(tr("reviewLead"))}</p>
+          <div class="metric-strip">
+            <div class="metric"><small>${escapeHtml(tr("dueNow"))}</small><strong>${dueIds.length}</strong></div>
+            <div class="metric"><small>${escapeHtml(tr("inQueue"))}</small><strong>${queuedIds.length}</strong></div>
+            <div class="metric"><small>${escapeHtml(tr("method"))}</small><strong>${escapeHtml(tr("spacedRepetition"))}</strong></div>
           </div>
         </article>
-        <article class="article-panel">
-          <h2>${iconMarkup("mdi:checklist", "article-title-icon")} Mini Method</h2>
-          <div class="pathway-map">
-            <div class="path-step"><span>1</span><div><strong>Locate</strong><small>Where is the structure?</small></div></div>
-            <div class="path-step"><span>2</span><div><strong>Assign</strong><small>What does it help compute?</small></div></div>
-            <div class="path-step"><span>3</span><div><strong>Predict</strong><small>What happens if it fails?</small></div></div>
-            <div class="path-step"><span>4</span><div><strong>Connect</strong><small>Which pathway explains it?</small></div></div>
-          </div>
+        <article class="article-panel" id="reviewPanel">
+          ${renderReviewCard(dueIds)}
         </article>
       </section>
 
-      <section class="study-grid">
-        <article class="study-panel">
-          <h3>${iconMarkup("mdi:briefcase-medical", "card-icon")} Clinical prompts</h3>
-          <ul>
-            <li>Personality change plus poor inhibition: compare frontal lobe and limbic circuits.</li>
-            <li>New memory formation is impaired: inspect hippocampus and medial temporal lobe.</li>
-            <li>Unsteady gait and intention tremor: inspect cerebellum.</li>
-            <li>Contralateral visual field loss: inspect occipital cortex and optic radiations.</li>
-          </ul>
-        </article>
-        <article class="study-panel">
-          <h3>${iconMarkup("mdi:brain", "card-icon")} Psychology prompts</h3>
-          <ul>
-            <li>Fear conditioning: limbic system, amygdala, hippocampus, and prefrontal regulation.</li>
-            <li>Working memory: prefrontal cortex with parietal attention networks.</li>
-            <li>Language comprehension: temporal lobe networks.</li>
-            <li>Embodied attention: parietal body-space maps.</li>
-          </ul>
-        </article>
-      </section>
-
-      <section class="study-panel">
-        <h3>${iconMarkup("mdi:chart-bar", "card-icon")} Fast compare</h3>
-        <table class="compare-table">
-          <thead>
-            <tr>
-              <th>Structure</th>
-              <th>Core function</th>
-              <th>Failure pattern</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${PARTS.map((part) => `
-              <tr>
-                <td><a href="#part/${part.id}">${escapeHtml(part.label)}</a></td>
-                <td>${escapeHtml(part.quick)}</td>
-                <td>${escapeHtml(part.clinical)}</td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      </section>
+      ${queuedIds.length ? renderQueueList(queuedIds) : ""}
     </div>
   `;
 }
 
-els.partSearch.addEventListener("input", renderPartsList);
+function renderReviewCard(dueIds) {
+  if (!dueIds.length) {
+    const queued = Object.keys(reviewData).filter((id) => PART_MAP.has(id)).length;
+    const message = queued ? tr("reviewCaughtUp") : tr("reviewEmpty");
+    return `
+      <p class="article-kicker">${iconMarkup("mdi:check-decagram", "article-kicker-icon")} ${escapeHtml(tr("recallPrompt"))}</p>
+      <div class="empty-state">${escapeHtml(message)} <a href="#atlas">${escapeHtml(tr("openAtlas"))}</a></div>
+    `;
+  }
+  const id = dueIds[0];
+  if (reviewSession.id !== id) {
+    reviewSession.id = id;
+    reviewSession.revealed = false;
+  }
+  const display = currentPart(PART_MAP.get(id));
+  if (reviewSession.revealed) {
+    return `
+      <p class="article-kicker">${escapeHtml(display.group)}</p>
+      <h2>${escapeHtml(display.label)}</h2>
+      <p class="lede">${escapeHtml(display.quick)}</p>
+      <p>${escapeHtml(display.clinical)}</p>
+      <div class="dock-actions">
+        <button class="primary-link" type="button" data-review="good">${iconMarkup("mdi:check", "action-icon")} ${escapeHtml(tr("remembered"))}</button>
+        <button class="ghost-link" type="button" data-review="again">${iconMarkup("mdi:refresh", "action-icon")} ${escapeHtml(tr("forgot"))}</button>
+      </div>
+    `;
+  }
+  return `
+    <p class="article-kicker">${escapeHtml(tr("recallPrompt"))}</p>
+    <h2>${escapeHtml(display.label)}</h2>
+    <p>${escapeHtml(tr("recallHint"))}</p>
+    <div class="dock-actions">
+      <button class="primary-link" type="button" data-review="reveal">${iconMarkup("mdi:eye", "action-icon")} ${escapeHtml(tr("reveal"))}</button>
+      <a class="ghost-link" href="#part/${id}">${escapeHtml(tr("openFullPage"))}</a>
+    </div>
+  `;
+}
+
+function renderQueueList(ids) {
+  return `
+    <section class="study-panel">
+      <h3>${iconMarkup("mdi:format-list-checks", "card-icon")} ${escapeHtml(tr("reviewQueue"))}</h3>
+      <ul>
+        ${ids.map((id) => {
+          const display = currentPart(PART_MAP.get(id));
+          const due = reviewData[id].due;
+          const label = due <= Date.now() ? tr("dueNow") : new Date(due).toLocaleDateString();
+          return `<li><a href="#part/${id}">${escapeHtml(display.label)}</a> &middot; <span class="queue-due">${escapeHtml(label)}</span></li>`;
+        }).join("")}
+      </ul>
+    </section>
+  `;
+}
+
 document.querySelector(".page-nav").addEventListener("click", (event) => {
   const link = event.target.closest("[data-route]");
   if (!link) return;
   window.requestAnimationFrame(renderRoute);
-});
-
-els.partsList.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-part]");
-  if (!button) return;
-  setSelectedPart(button.dataset.part, { focusAtlas: true });
 });
 
 els.brainHotspots.addEventListener("click", (event) => {
@@ -1167,6 +1686,39 @@ els.brainCallout.addEventListener("click", (event) => {
   }
 });
 
+// Bottom region card: double-click toggles short <-> long; chip adds to review.
+els.infoDock.addEventListener("dblclick", (event) => {
+  const card = event.target.closest(".region-card");
+  if (!card || event.target.closest("a") || event.target.closest(".region-chip")) return;
+  state.infoExpanded = !state.infoExpanded;
+  card.classList.toggle("is-expanded", state.infoExpanded);
+  card.setAttribute("aria-expanded", String(state.infoExpanded));
+});
+
+els.infoDock.addEventListener("click", (event) => {
+  const reviewBtn = event.target.closest('[data-action="review"]');
+  if (!reviewBtn) return;
+  event.preventDefault();
+  toggleReview(state.selectedPartId);
+  renderInfoDock(PART_MAP.get(state.selectedPartId));
+});
+
+// Study review controls
+els.articleScreen.addEventListener("click", (event) => {
+  const btn = event.target.closest("[data-review]");
+  if (!btn) return;
+  const action = btn.dataset.review;
+  if (action === "reveal") {
+    reviewSession.revealed = true;
+  } else {
+    reviewGrade(reviewSession.id, action === "good");
+    reviewSession.id = null;
+    reviewSession.revealed = false;
+  }
+  renderStudyPage();
+  applyAos(els.articleScreen);
+});
+
 document.addEventListener("pointerdown", (event) => {
   if (!state.calloutVisible) return;
   if (event.target.closest(".brain-callout") || event.target.closest(".brain-hotspot")) return;
@@ -1181,6 +1733,7 @@ document.addEventListener("keydown", (event) => {
 
 els.viewButtons.forEach((button) => {
   button.addEventListener("click", () => {
+    if (state.diving) window.location.hash = "atlas";
     state.viewMode = button.dataset.view;
     els.viewButtons.forEach((item) => item.classList.toggle("is-active", item === button));
     updateMeshTargets();
@@ -1188,13 +1741,33 @@ els.viewButtons.forEach((button) => {
   });
 });
 
+if (els.diveBtn) {
+  els.diveBtn.addEventListener("click", () => {
+    window.location.hash = state.diving ? "atlas" : "neurons";
+  });
+}
+
+els.langButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    state.lang = button.dataset.lang;
+    localStorage.setItem("brainAtlasLang", state.lang);
+    renderStaticText();
+    renderInfoDock(PART_MAP.get(state.selectedPartId));
+    updateLegend(PART_MAP.get(state.selectedPartId));
+    updateModelStatus();
+    updateReviewBadge();
+    if (state.diving) renderNeuronCaption();
+    renderRoute();
+  });
+});
+
 window.addEventListener("hashchange", renderRoute);
 
-renderPartsList();
-renderBrainHotspots();
+renderStaticText();
 renderInfoDock(PART_MAP.get(state.selectedPartId));
 updateLegend(PART_MAP.get(state.selectedPartId));
 updateModelStatus();
+updateReviewBadge();
 renderRoute();
 
 async function initThree() {
@@ -1208,10 +1781,14 @@ async function initThree() {
     setupScene();
     state.threeReady = true;
     updateModelStatus();
+    if (els.diveBtn) els.diveBtn.hidden = false;
+    // Re-run routing now that 3D is ready (e.g. a #neurons deep-link can dive).
+    renderRoute();
   } catch (error) {
     console.error(error);
     state.threeReady = false;
-    els.modelStatus.textContent = "3D engine unavailable";
+    els.modelStatus.textContent = tr("unavailableStatus");
+    if (els.diveBtn) els.diveBtn.hidden = true;
     drawFallbackBrain();
   }
 }
@@ -1219,10 +1796,14 @@ async function initThree() {
 function setupScene() {
   const stage = els.canvas.parentElement;
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x07090d, 0.02);
+  scene.fog = new THREE.FogExp2(0x05070b, 0.015);
+  tmpVec = new THREE.Vector3();
+  nodeCenter = new THREE.Vector3();
+  nodeDir = new THREE.Vector3();
+  nodeView = new THREE.Vector3();
 
-  camera = new THREE.PerspectiveCamera(48, 1, 0.1, 40);
-  camera.position.set(0, 0.24, 4.6);
+  camera = new THREE.PerspectiveCamera(46, 1, 0.05, 60);
+  camera.position.set(0, 0.16, cameraRig.baseZ);
 
   renderer = new THREE.WebGLRenderer({
     canvas: els.canvas,
@@ -1233,33 +1814,39 @@ function setupScene() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.08;
+  renderer.toneMappingExposure = 1.05;
   renderer.localClippingEnabled = true;
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
-  controls.autoRotate = true;
-  controls.autoRotateSpeed = 0.18;
+  controls.autoRotate = !prefersReducedMotion;
+  controls.autoRotateSpeed = 0.16;
   controls.enablePan = false;
-  controls.minDistance = 3.4;
-  controls.maxDistance = 9.2;
-  controls.target.set(0, 0.18, 0);
+  controls.minDistance = 1.2;
+  controls.maxDistance = 8;
+  controls.target.set(0, 0.12, 0);
   controls.update();
 
   raycaster = new THREE.Raycaster();
   pointer = new THREE.Vector2();
   sagittalPlane = new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0.06);
 
-  addLights();
-  addEnvironment();
+  brainPivot = new THREE.Group();
+  scene.add(brainPivot);
+
+  addStarfield();
   createBrainModel();
+  createNeuronModel();
   updateMeshTargets();
 
   els.canvas.addEventListener("click", onCanvasClick);
   els.canvas.addEventListener("pointermove", onCanvasPointerMove);
   els.canvas.addEventListener("pointerleave", () => {
     els.canvas.style.cursor = "default";
+    pointerParallax.tx = 0;
+    pointerParallax.ty = 0;
+    hideNodeTip();
   });
 
   resizeObserver = new ResizeObserver(resizeRenderer);
@@ -1268,40 +1855,35 @@ function setupScene() {
   animateScene();
 }
 
-function addLights() {
-  scene.add(new THREE.AmbientLight(0xdcd2c8, 0.55));
-
-  const key = new THREE.DirectionalLight(0xffffff, 1.4);
-  key.position.set(3.4, 5.2, 4.2);
-  scene.add(key);
-
-  const fill = new THREE.DirectionalLight(0xc7d9e6, 0.6);
-  fill.position.set(-4.6, 3.2, 2.4);
-  scene.add(fill);
-
-  const rim = new THREE.DirectionalLight(0xfff0e0, 0.5);
-  rim.position.set(0.4, 1.2, -4.8);
-  scene.add(rim);
-}
-
-function addEnvironment() {
-  const shadowGeometry = new THREE.CircleGeometry(2.2, 64);
-  const shadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x000000,
+function addStarfield() {
+  const count = 520;
+  const positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i += 1) {
+    const r = 6 + Math.random() * 16;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i * 3 + 1] = r * Math.cos(phi) * 0.6;
+    positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const material = new THREE.PointsMaterial({
+    color: 0x9fb4c9,
+    size: 0.03,
+    sizeAttenuation: true,
     transparent: true,
-    opacity: 0.32,
+    opacity: 0.5,
     depthWrite: false
   });
-  const shadow = new THREE.Mesh(shadowGeometry, shadowMaterial);
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = -1.45;
-  scene.add(shadow);
+  starField = new THREE.Points(geometry, material);
+  scene.add(starField);
 }
 
 function createBrainModel() {
   brainGroup = new THREE.Group();
   brainGroup.rotation.set(-0.08, -0.34, 0.02);
-  scene.add(brainGroup);
+  brainPivot.add(brainGroup);
   createCortexShell();
 
   const cortical = [
@@ -1388,6 +1970,238 @@ function createBrainModel() {
   createMarkerPart("medulla", [0, -1.12, -0.08], [0.16, 0.2, 0.14], "internal", 0.98);
   createMarkerPart("cerebellar-vermis", [0, -0.46, -1.12], [0.13, 0.2, 0.12], "internal", 0.98);
   createMarkerPart("pineal", [0, 0.14, -0.42], [0.07, 0.07, 0.07], "internal", 0.98);
+
+  createRegionNodes();
+}
+
+// --- 3D region nodes (the "dots" that ride along with the brain) ---
+const NODE_VERT = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const NODE_FRAG = `
+  uniform vec3 uColor;
+  uniform float uActive;
+  uniform float uWorld;
+  uniform float uFront;
+  varying vec2 vUv;
+  void main() {
+    vec2 p = vUv - 0.5;
+    float d = length(p) * 2.0;
+    if (d > 1.0) discard;
+    float core = smoothstep(0.42, 0.0, d);
+    float ring = smoothstep(0.86, 0.62, d) * (1.0 - smoothstep(0.62, 0.4, d));
+    float a = (core * (0.5 + 0.5 * uActive) + ring * (0.6 + 0.4 * uActive)) * uWorld * uFront;
+    vec3 col = mix(uColor, vec3(1.0), 0.3 * uActive);
+    gl_FragColor = vec4(col, clamp(a, 0.0, 1.0));
+  }
+`;
+
+// Every teaching structure gets a dot, so the brain itself is the navigator.
+const NODE_PARTS = [
+  "frontal", "prefrontal", "parietal", "temporal", "occipital", "cerebellum",
+  "brainstem", "pons", "medulla", "thalamus", "hypothalamus", "hippocampus",
+  "amygdala", "limbic", "basal-ganglia", "insula", "cingulate-cortex",
+  "broca", "wernicke", "motor-cortex", "somatosensory-cortex",
+  "visual-cortex", "auditory-cortex", "corpus-callosum"
+];
+
+function makeNodeMaterial(colorHex) {
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: lightTint(colorHex, 0.42) },
+      uActive: { value: 0 },
+      uWorld: { value: 1 },
+      uFront: { value: 1 },
+      uTime: { value: 0 }
+    },
+    vertexShader: NODE_VERT,
+    fragmentShader: NODE_FRAG,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false
+  });
+  material.userData.world = "brain";
+  timeMaterials.push(material);
+  return material;
+}
+
+function createRegionNodes() {
+  const geometry = new THREE.PlaneGeometry(1, 1);
+  NODE_PARTS.forEach((partId) => {
+    const part = PART_MAP.get(partId);
+    if (!part) return;
+    const source = visualEntries.find((e) => e.partId === partId && e.side === "right")
+      || visualEntries.find((e) => e.partId === partId);
+    if (!source) return;
+    const material = makeNodeMaterial(part.color);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 12;
+    mesh.userData.partId = partId;
+    mesh.userData.node = true;
+    scene.add(mesh);
+    clickableMeshes.push(mesh);
+    regionNodes.push({
+      mesh,
+      material,
+      partId,
+      source: source.mesh,
+      front: 1,
+      phase: Math.random() * Math.PI * 2,
+      targetActive: 0
+    });
+  });
+}
+
+// --- Neuron dive scene ---
+function neuronHolo(colorHex, opacity, rim) {
+  const m = makeHoloMaterial(colorHex, { opacity, rimPower: rim, tint: 0.45 });
+  m.userData.world = "neuron";
+  m.uniforms.uWorld.value = 0;
+  return m;
+}
+
+function neuronGlow(colorHex) {
+  const m = makeGlowMaterial(colorHex);
+  m.userData.world = "neuron";
+  m.uniforms.uWorld.value = 0;
+  m.uniforms.uActive.value = 1;
+  return m;
+}
+
+function createNeuronModel() {
+  const accent = 0x9fb4c9;
+  neuronGroup = new THREE.Group();
+  neuronGroup.visible = false;
+  neuronGroup.position.set(-0.7, 0.05, 0);
+  neuronGroup.scale.setScalar(0.7);
+  scene.add(neuronGroup);
+
+  const soma = new THREE.Mesh(createOrganicGeometry(7), neuronHolo(accent, 0.5, 2.0));
+  soma.scale.set(0.5, 0.46, 0.5);
+  neuronGroup.add(soma);
+
+  const dendriteDirs = [
+    [-0.5, 0.55, 0.2], [-0.62, -0.12, -0.3], [-0.4, -0.5, 0.32],
+    [-0.2, 0.72, -0.2], [-0.72, 0.2, 0.12], [-0.55, -0.35, -0.15]
+  ];
+  dendriteDirs.forEach((d) => {
+    const start = new THREE.Vector3(-0.28, 0, 0);
+    const dir = new THREE.Vector3(d[0], d[1], d[2]).normalize();
+    const mid = start.clone().addScaledVector(dir, 0.45);
+    const end = start.clone().addScaledVector(dir, 0.95 + Math.random() * 0.3);
+    const branch = end.clone().add(new THREE.Vector3(
+      (Math.random() - 0.5) * 0.5,
+      (Math.random() - 0.5) * 0.5,
+      (Math.random() - 0.5) * 0.5
+    ));
+    const curve = new THREE.CatmullRomCurve3([start, mid, end, branch]);
+    const geo = new THREE.TubeGeometry(curve, 36, 0.02, 8, false);
+    neuronGroup.add(new THREE.Mesh(geo, neuronHolo(accent, 0.55, 2.4)));
+  });
+
+  const axonCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.2, 0, 0),
+    new THREE.Vector3(0.95, 0.06, 0.05),
+    new THREE.Vector3(1.7, -0.05, -0.04),
+    new THREE.Vector3(2.5, 0.04, 0.02)
+  ]);
+  neuronGroup.add(new THREE.Mesh(new THREE.TubeGeometry(axonCurve, 120, 0.03, 10, false), neuronHolo(accent, 0.5, 2.2)));
+
+  for (let i = 0; i < 7; i += 1) {
+    const tt = 0.16 + i * 0.1;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.062, 0.02, 8, 20), neuronHolo(accent, 0.6, 2.0));
+    ring.position.copy(axonCurve.getPoint(tt));
+    ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), axonCurve.getTangent(tt));
+    neuronGroup.add(ring);
+  }
+
+  const terminal = new THREE.Mesh(createOrganicGeometry(11), neuronHolo(accent, 0.55, 2.2));
+  terminal.position.copy(axonCurve.getPoint(1));
+  terminal.scale.setScalar(0.18);
+  neuronGroup.add(terminal);
+
+  const vCount = 70;
+  const vp = new Float32Array(vCount * 3);
+  const tp = axonCurve.getPoint(1);
+  for (let i = 0; i < vCount; i += 1) {
+    vp[i * 3] = tp.x + 0.08 + Math.random() * 0.45;
+    vp[i * 3 + 1] = tp.y + (Math.random() - 0.5) * 0.45;
+    vp[i * 3 + 2] = tp.z + (Math.random() - 0.5) * 0.45;
+  }
+  const vGeo = new THREE.BufferGeometry();
+  vGeo.setAttribute("position", new THREE.BufferAttribute(vp, 3));
+  neuronVesicles = new THREE.PointsMaterial({
+    color: lightTint(accent, 0.55),
+    size: 0.045,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false
+  });
+  neuronGroup.add(new THREE.Points(vGeo, neuronVesicles));
+
+  neuronPulseMat = neuronGlow(accent);
+  const pulse = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 16), neuronPulseMat);
+  neuronGroup.add(pulse);
+  neuronPulse = { mesh: pulse, curve: axonCurve };
+}
+
+function updateNeuron(t) {
+  if (!neuronPulse) return;
+  const u = (t * 0.32) % 1;
+  neuronPulse.mesh.position.copy(neuronPulse.curve.getPoint(u));
+  neuronPulse.mesh.scale.setScalar(0.5 + Math.sin(u * Math.PI) * 0.9);
+  if (neuronVesicles) neuronVesicles.opacity = 0.6 * diveState.t;
+}
+
+function startDive() {
+  if (state.diving) return;
+  state.diving = true;
+  diveState.target = 1;
+  hideCallout();
+  if (controls) {
+    controls.autoRotate = false;
+    controls.minDistance = 0.6;
+  }
+  cameraRig.targetZ = cameraRig.baseZ;
+  updateDiveUI();
+}
+
+function endDive() {
+  if (!state.diving) return;
+  state.diving = false;
+  diveState.target = 0;
+  if (controls) {
+    controls.autoRotate = !prefersReducedMotion;
+    controls.minDistance = 1.2;
+  }
+  updateDiveUI();
+}
+
+function updateDiveUI() {
+  if (els.stagePanel) els.stagePanel.dataset.mode = state.diving ? "dive" : "brain";
+  if (els.diveBtn) {
+    els.diveBtn.innerHTML = state.diving
+      ? `${iconMarkup("mdi:arrow-up-bold-box-outline")} <span>${escapeHtml(tr("surface"))}</span>`
+      : `${iconMarkup("mdi:diving-scuba")} <span>${escapeHtml(tr("dive"))}</span>`;
+    els.diveBtn.setAttribute("aria-pressed", String(state.diving));
+  }
+  if (els.neuronCaption) els.neuronCaption.classList.toggle("is-visible", state.diving);
+  if (els.topbarActions) els.topbarActions.style.visibility = state.diving ? "hidden" : "visible";
+  if (els.infoDock) els.infoDock.style.display = state.diving ? "none" : "";
+}
+
+function renderNeuronCaption() {
+  if (!els.neuronCaption) return;
+  els.neuronCaption.innerHTML = `
+    <small>${escapeHtml(tr("neuronsEyebrow"))}</small>
+    <strong>${escapeHtml(tr("neuronDiveTitle"))}</strong>
+    <p>${escapeHtml(tr("neuronDiveLead"))}</p>
+  `;
 }
 
 function createOrganicPart(layout) {
@@ -1402,46 +2216,29 @@ function createOrganicPart(layout) {
   mesh.userData.partId = part.id;
   mesh.userData.clickable = true;
 
-  const wire = new THREE.Mesh(geometry.clone(), new THREE.MeshBasicMaterial({
-    color: new THREE.Color(part.color),
-    wireframe: false,
-    transparent: true,
-    opacity: 0.045,
-    depthWrite: false
-  }));
-  wire.userData.partId = part.id;
-  mesh.add(wire);
+  const glow = new THREE.Mesh(geometry.clone(), makeGlowMaterial(part.color));
+  glow.scale.setScalar(1.12);
+  glow.userData.partId = part.id;
+  mesh.add(glow);
 
   brainGroup.add(mesh);
   clickableMeshes.push(mesh);
-  registerVisualEntry(mesh, material, part.id, layout.side, layout.cortical, layout.opacity ?? 0.64, [wire.material]);
+  registerVisualEntry(mesh, material, part.id, layout.side, layout.cortical, layout.opacity ?? 0.64, [glow.material]);
 }
 
 function createCortexShell() {
   const geometry = createRealisticCortexGeometry(34);
-  const texture = createCortexTexture();
-  const material = new THREE.MeshPhysicalMaterial({
-    color: 0xd6a89a,
-    roughness: 0.62,
-    metalness: 0.0,
-    clearcoat: 0.18,
-    clearcoatRoughness: 0.55,
-    sheen: 0.4,
-    sheenColor: new THREE.Color(0xffd9cf),
-    map: texture,
-    transparent: true,
-    opacity: 0.78,
-    depthWrite: false,
-    side: THREE.FrontSide,
-    emissive: new THREE.Color(0x000000),
-    emissiveIntensity: 0
-  });
+  // Smoked-glass holographic cortex: cool blue-grey, faint fresnel rim
+  const material = makeHoloMaterial(0x9fb4c9, { opacity: 0.42, rimPower: 1.7, tint: 0.22 });
 
   const cerebrum = new THREE.Mesh(geometry, material);
   cerebrum.name = "Cerebrum";
   cerebrum.position.set(0, 0.42, 0.0);
   cerebrum.scale.set(1.18, 1.04, 1.5);
   brainGroup.add(cerebrum);
+
+  const entry = registerVisualEntry(cerebrum, material, "__cortex__", "shell", true, 0.34);
+  entry.shell = true;
 }
 
 function createCortexTexture() {
@@ -1555,14 +2352,8 @@ function createMarkerPart(partId, position, scale, side, opacity) {
   mesh.userData.partId = part.id;
   mesh.userData.clickable = true;
 
-  const halo = new THREE.Mesh(geometry.clone(), new THREE.MeshBasicMaterial({
-    color: new THREE.Color(part.color),
-    wireframe: false,
-    transparent: true,
-    opacity: 0.16,
-    depthWrite: false
-  }));
-  halo.scale.setScalar(1.16);
+  const halo = new THREE.Mesh(geometry.clone(), makeGlowMaterial(part.color));
+  halo.scale.setScalar(1.2);
   mesh.add(halo);
 
   brainGroup.add(mesh);
@@ -1660,45 +2451,149 @@ function createLimbicRing() {
   registerVisualEntry(mesh, material, part.id, "internal", false, 0.88);
 }
 
-function createPartMaterial(part, opacity) {
-  const baseColor = new THREE.Color(part.color).lerp(new THREE.Color(0xb8857a), 0.42);
-  return new THREE.MeshPhysicalMaterial({
-    color: baseColor,
-    roughness: 0.55,
-    metalness: 0.04,
-    clearcoat: 0.18,
-    clearcoatRoughness: 0.55,
-    transparent: true,
-    opacity: Math.min(opacity, 0.78),
-    emissive: new THREE.Color(part.color),
-    emissiveIntensity: 0,
-    depthWrite: false
-  });
+// --- Holographic shaders (core Three.js only; no postprocessing addons) ---
+const HOLO_VERT = `
+  #include <clipping_planes_pars_vertex>
+  varying vec3 vNormalW;
+  varying vec3 vViewDir;
+  varying vec3 vWorldPos;
+  void main() {
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vec4 mvPosition = viewMatrix * worldPos;
+    vWorldPos = worldPos.xyz;
+    vNormalW = normalize(mat3(modelMatrix) * normal);
+    vViewDir = normalize(cameraPosition - worldPos.xyz);
+    gl_Position = projectionMatrix * mvPosition;
+    #include <clipping_planes_vertex>
+  }
+`;
+
+const HOLO_FRAG = `
+  #include <clipping_planes_pars_fragment>
+  uniform vec3 uColor;
+  uniform float uActive;
+  uniform float uOpacity;
+  uniform float uTime;
+  uniform float uRimPower;
+  uniform float uWorld;
+  varying vec3 vNormalW;
+  varying vec3 vViewDir;
+  varying vec3 vWorldPos;
+  void main() {
+    #include <clipping_planes_fragment>
+    vec3 n = normalize(vNormalW);
+    vec3 v = normalize(vViewDir);
+    float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), uRimPower);
+    float scan = 1.0 - 0.05 * (0.5 + 0.5 * sin(vWorldPos.y * 38.0 - uTime * 1.4));
+    float fill = 0.12 + 0.45 * uActive;
+    float alpha = (fres * (0.85 + 0.4 * uActive) + fill) * uOpacity * scan * uWorld;
+    vec3 col = uColor * (0.8 + 0.85 * fres + 0.7 * uActive);
+    gl_FragColor = vec4(col, clamp(alpha, 0.0, 1.0));
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+const GLOW_FRAG = `
+  uniform vec3 uColor;
+  uniform float uActive;
+  uniform float uTime;
+  uniform float uOpacity;
+  uniform float uRimPower;
+  uniform float uWorld;
+  varying vec3 vNormalW;
+  varying vec3 vViewDir;
+  varying vec3 vWorldPos;
+  void main() {
+    vec3 n = normalize(vNormalW);
+    vec3 v = normalize(vViewDir);
+    float fres = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 3.0);
+    float alpha = fres * uActive * 0.9 * uWorld;
+    gl_FragColor = vec4(uColor, clamp(alpha, 0.0, 1.0));
+  }
+`;
+
+function lightTint(colorHex, amount = 0.5) {
+  return new THREE.Color(colorHex).lerp(new THREE.Color(0xffffff), amount);
 }
 
-function registerVisualEntry(mesh, material, partId, side, cortical, baseOpacity, relatedMaterials = []) {
-  const opacity = Math.min(baseOpacity, material.opacity ?? baseOpacity);
-  visualEntries.push({
+function makeHoloMaterial(colorHex, { opacity = 0.5, rimPower = 2.4, active = 0, tint = 0.5, side = THREE.DoubleSide } = {}) {
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: lightTint(colorHex, tint) },
+      uActive: { value: active },
+      uOpacity: { value: opacity },
+      uTime: { value: 0 },
+      uRimPower: { value: rimPower },
+      uWorld: { value: 1 }
+    },
+    vertexShader: HOLO_VERT,
+    fragmentShader: HOLO_FRAG,
+    transparent: true,
+    depthWrite: false,
+    clipping: true,
+    side
+  });
+  material.userData.world = "brain";
+  timeMaterials.push(material);
+  return material;
+}
+
+function makeGlowMaterial(colorHex) {
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: lightTint(colorHex, 0.38) },
+      uActive: { value: 0 },
+      uOpacity: { value: 1 },
+      uTime: { value: 0 },
+      uRimPower: { value: 3 },
+      uWorld: { value: 1 }
+    },
+    vertexShader: HOLO_VERT,
+    fragmentShader: GLOW_FRAG,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide
+  });
+  material.userData.world = "brain";
+  timeMaterials.push(material);
+  return material;
+}
+
+function createPartMaterial(part, opacity) {
+  // Keep more of each region's hue (less white) so parts stay distinguishable.
+  return makeHoloMaterial(part.color, { opacity: Math.min(opacity, 0.66), rimPower: 2.1, tint: 0.26 });
+}
+
+function registerVisualEntry(mesh, material, partId, side, cortical, baseOpacity, glowMaterials = []) {
+  const opacity = material.uniforms?.uOpacity?.value ?? baseOpacity;
+  const entry = {
     mesh,
     material,
-    relatedMaterials,
+    glowMaterials,
     partId,
     side,
     cortical,
+    shell: false,
     baseOpacity: opacity,
     basePosition: mesh.position.clone(),
     baseScale: mesh.scale.clone(),
     targetPosition: mesh.position.clone(),
     targetScale: mesh.scale.clone(),
-    targetOpacity: opacity
-  });
+    targetOpacity: opacity,
+    targetActive: 0,
+    lerpK: 0.06 + Math.random() * 0.055
+  };
+  visualEntries.push(entry);
+  return entry;
 }
 
 function updateMeshTargets() {
   if (!THREE) return;
 
   visualEntries.forEach((entry) => {
-    const selected = entry.partId === state.selectedPartId;
+    const selected = !entry.shell && entry.partId === state.selectedPartId;
     const targetPosition = entry.basePosition.clone();
     const targetScale = entry.baseScale.clone();
     let targetOpacity = entry.baseOpacity;
@@ -1706,55 +2601,67 @@ function updateMeshTargets() {
 
     if (state.viewMode === "half") {
       if (entry.cortical) {
-        targetOpacity = entry.side === "right" ? 0.18 : 0.66;
+        targetOpacity = entry.side === "right" ? entry.baseOpacity * 0.22 : entry.baseOpacity;
         clippingPlanes = [sagittalPlane];
-      } else {
-        targetOpacity = 0.72;
       }
     }
 
     if (state.viewMode === "inside") {
-      targetOpacity = entry.cortical ? 0.16 : 0.72;
+      targetOpacity = entry.cortical ? entry.baseOpacity * 0.16 : Math.min(0.72, entry.baseOpacity + 0.14);
     }
 
     if (state.viewMode === "split") {
-      const direction = entry.basePosition.clone();
-      if (direction.length() < 0.18) {
-        direction.set(entry.side === "right" ? 1 : entry.side === "left" ? -1 : 0, 0.2, 0.1);
+      if (entry.shell) {
+        targetOpacity = entry.baseOpacity * 0.35;
+      } else {
+        const direction = entry.basePosition.clone();
+        if (direction.length() < 0.18) {
+          direction.set(entry.side === "right" ? 1 : entry.side === "left" ? -1 : 0, 0.22, 0.12);
+        }
+        targetPosition.add(direction.normalize().multiplyScalar(entry.cortical ? 0.62 : 0.42));
+        targetScale.multiplyScalar(0.96);
       }
-      targetPosition.add(direction.normalize().multiplyScalar(entry.cortical ? 0.38 : 0.24));
-      targetOpacity = entry.cortical ? 0.62 : 0.72;
     }
 
     if (selected) {
       const direction = entry.basePosition.clone();
       if (direction.length() > 0.18) {
-        targetPosition.add(direction.normalize().multiplyScalar(0.12));
+        targetPosition.add(direction.normalize().multiplyScalar(0.16));
       }
-      targetScale.multiplyScalar(1.08);
-      targetOpacity = Math.min(0.88, targetOpacity + 0.22);
-      if (entry.material.emissive) {
-        entry.material.emissiveIntensity = 0.22;
-      }
+      targetScale.multiplyScalar(1.16);
+      targetOpacity = Math.min(0.98, targetOpacity + 0.4);
+    } else if (!entry.shell) {
+      // Focus mode: keep other regions readable but clearly secondary.
+      targetOpacity *= 0.42;
     } else {
-      if (entry.material.emissive) {
-        entry.material.emissiveIntensity = 0;
-      }
+      // Quiet the cortex shell a touch while a region is highlighted.
+      targetOpacity *= 0.8;
     }
 
-    entry.material.clippingPlanes = clippingPlanes;
-    entry.material.needsUpdate = true;
-    entry.relatedMaterials.forEach((material) => {
-      material.clippingPlanes = clippingPlanes;
-      material.needsUpdate = true;
-    });
+    // Only recompile shaders when the clipping-plane count actually changes.
+    const clipLen = clippingPlanes.length;
+    if (entry.clipLen !== clipLen) {
+      entry.material.clippingPlanes = clippingPlanes;
+      entry.material.needsUpdate = true;
+      entry.clipLen = clipLen;
+    } else {
+      entry.material.clippingPlanes = clippingPlanes;
+    }
     entry.targetPosition = targetPosition;
     entry.targetScale = targetScale;
     entry.targetOpacity = targetOpacity;
+    entry.targetActive = selected ? 1 : 0;
   });
+
+  regionNodes.forEach((node) => {
+    node.targetActive = node.partId === state.selectedPartId ? 1 : 0;
+  });
+
+  cameraRig.targetZ = state.viewMode === "split" ? cameraRig.baseZ + 0.7 : cameraRig.baseZ;
 }
 
 function onCanvasClick(event) {
+  if (state.diving) return;
   const hit = pickPart(event);
   if (!hit) {
     hideCallout();
@@ -1764,8 +2671,36 @@ function onCanvasClick(event) {
 }
 
 function onCanvasPointerMove(event) {
+  const rect = els.canvas.getBoundingClientRect();
+  pointerParallax.tx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  pointerParallax.ty = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+  if (state.diving) {
+    els.canvas.style.cursor = "grab";
+    hideNodeTip();
+    return;
+  }
   const hit = pickPart(event);
   els.canvas.style.cursor = hit ? "pointer" : "grab";
+  if (hit && hit.object.userData.partId) {
+    showNodeTip(hit.object.userData.partId, event.clientX - rect.left, event.clientY - rect.top);
+  } else {
+    hideNodeTip();
+  }
+}
+
+function showNodeTip(partId, x, y) {
+  if (!els.nodeTip) return;
+  const part = PART_MAP.get(partId);
+  if (!part) return;
+  els.nodeTip.textContent = currentPart(part).label;
+  els.nodeTip.style.setProperty("--part-color", part.color);
+  els.nodeTip.style.left = `${x}px`;
+  els.nodeTip.style.top = `${y}px`;
+  els.nodeTip.classList.add("is-visible");
+}
+
+function hideNodeTip() {
+  if (els.nodeTip) els.nodeTip.classList.remove("is-visible");
 }
 
 function pickPart(event) {
@@ -1791,32 +2726,113 @@ function resizeRenderer() {
 
 function animateScene() {
   animationFrameId = requestAnimationFrame(animateScene);
+  const t = (nowMs() - clock.start) / 1000;
 
   visualEntries.forEach((entry) => {
-    entry.mesh.position.lerp(entry.targetPosition, 0.08);
-    entry.mesh.scale.lerp(entry.targetScale, 0.08);
-    entry.material.opacity += (entry.targetOpacity - entry.material.opacity) * 0.08;
-    entry.relatedMaterials.forEach((material) => {
-      const target = Math.min(0.26, entry.targetOpacity * 0.32);
-      material.opacity += (target - material.opacity) * 0.08;
+    const k = entry.lerpK || 0.08;
+    entry.mesh.position.lerp(entry.targetPosition, k);
+    entry.mesh.scale.lerp(entry.targetScale, k);
+    const u = entry.material.uniforms;
+    if (u) {
+      u.uOpacity.value += (entry.targetOpacity - u.uOpacity.value) * 0.09;
+      u.uActive.value += (entry.targetActive - u.uActive.value) * 0.09;
+    }
+    entry.glowMaterials.forEach((m) => {
+      if (m.uniforms) m.uniforms.uActive.value += (entry.targetActive - m.uniforms.uActive.value) * 0.09;
     });
   });
+
+  // Dive crossfade (brain world <-> neuron world) and time on all holo materials
+  diveState.t += (diveState.target - diveState.t) * 0.06;
+  const diveT = diveState.t;
+  for (let i = 0; i < timeMaterials.length; i += 1) {
+    const u = timeMaterials[i].uniforms;
+    if (!u) continue;
+    if (u.uTime) u.uTime.value = t;
+    if (u.uWorld) {
+      u.uWorld.value = timeMaterials[i].userData.world === "neuron" ? diveT : (1 - diveT);
+    }
+  }
+  if (brainPivot) brainPivot.visible = diveT < 0.992;
+  if (neuronGroup) neuronGroup.visible = diveT > 0.008;
+
+  updateRegionNodes(t);
+  if (neuronGroup && neuronGroup.visible) updateNeuron(t);
+  updateParallax();
+  updateCameraRig();
+
+  if (starField) {
+    starField.rotation.y = t * 0.012;
+    starField.rotation.x = Math.sin(t * 0.05) * 0.04;
+  }
 
   controls.update();
   renderer.render(scene, camera);
   positionAnnotation();
 }
 
+function nowMs() {
+  return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function updateRegionNodes(t) {
+  if (!regionNodes.length || !camera || !tmpVec || !brainGroup) return;
+  const dist = camera.position.distanceTo(controls.target);
+  const pixelScale = dist * 0.019;
+  const center = brainGroup.getWorldPosition(nodeCenter);
+  regionNodes.forEach((node) => {
+    const u = node.material.uniforms;
+    u.uActive.value += (node.targetActive - u.uActive.value) * 0.1;
+    node.source.getWorldPosition(tmpVec);
+    node.mesh.position.copy(tmpVec);
+    // Fade dots that face away from the camera (far side of the brain).
+    nodeDir.copy(tmpVec).sub(center);
+    nodeView.copy(camera.position).sub(tmpVec).normalize();
+    const facing = nodeDir.lengthSq() > 1e-5 ? nodeDir.normalize().dot(nodeView) : 1;
+    const front = Math.max(THREE.MathUtils.smoothstep(facing, -0.35, 0.25), node.targetActive);
+    node.front += (front - node.front) * 0.12;
+    u.uFront.value = node.front;
+    const pulse = 1 + Math.sin(t * 2.2 + node.phase) * 0.07 + node.targetActive * 0.6;
+    const s = pixelScale * pulse;
+    node.mesh.scale.set(s, s, s);
+    node.mesh.quaternion.copy(camera.quaternion);
+  });
+}
+
+function updateParallax() {
+  if (!brainPivot) return;
+  if (prefersReducedMotion) return;
+  pointerParallax.x += (pointerParallax.tx - pointerParallax.x) * 0.06;
+  pointerParallax.y += (pointerParallax.ty - pointerParallax.y) * 0.06;
+  brainPivot.rotation.y = pointerParallax.x * 0.18;
+  brainPivot.rotation.x = -pointerParallax.y * 0.12;
+  if (els.stagePanel) {
+    els.stagePanel.style.setProperty("--par-x", `${pointerParallax.x * 18}px`);
+    els.stagePanel.style.setProperty("--par-y", `${pointerParallax.y * 14}px`);
+  }
+}
+
+function updateCameraRig() {
+  if (!tmpVec || !camera || !controls) return;
+  const desired = diveState.target > 0.5 ? cameraRig.diveZ : cameraRig.targetZ;
+  tmpVec.copy(camera.position).sub(controls.target);
+  const curDist = tmpVec.length();
+  if (curDist < 1e-4) return;
+  tmpVec.normalize();
+  const newDist = curDist + (desired - curDist) * 0.05;
+  camera.position.copy(controls.target).addScaledVector(tmpVec, newDist);
+}
+
 function updateModelStatus() {
   els.stagePanel.dataset.view = state.viewMode;
   if (!state.threeReady) return;
   const labels = {
-    full: "Full cortical model",
-    half: "Sagittal half view",
-    inside: "Internal systems emphasized",
-    split: "Separated structure view"
+    full: tr("fullStatus"),
+    half: tr("halfStatus"),
+    inside: tr("insideStatus"),
+    split: tr("splitStatus")
   };
-  els.modelStatus.textContent = labels[state.viewMode] || "3D model ready";
+  els.modelStatus.textContent = labels[state.viewMode] || tr("readyStatus");
 }
 
 function drawFallbackBrain() {
